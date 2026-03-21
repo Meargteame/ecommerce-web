@@ -50,7 +50,7 @@ export default function ProductCarousel({ title, category, sort = 'newest' }: Pr
   }, [category, sort])
 
   return (
-    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <section className="max-w-[1920px] mx-auto px-6 lg:px-12 py-12">
       <div className="flex items-end justify-between mb-8">
         <div>
           <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight leading-none mb-2">

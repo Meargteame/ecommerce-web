@@ -11,7 +11,7 @@ export default function CartItem({ item }: { item: CartItemType }) {
     <div className="flex gap-3 py-3 border-b border-gray-100 last:border-0">
       <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0">
         {item.image_url ? (
-          <Image src={item.image_url} alt={item.name} fill className="object-cover" />
+          <Image src={item.image_url} alt={item.name} fill sizes="64px" className="object-cover" />
         ) : (
           <div className="w-full h-full bg-gray-200" />
         )}

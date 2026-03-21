@@ -41,19 +41,19 @@ export default function AdminLogsPage() {
 
   const columns = [
     {
-      title: 'Event', dataIndex: 'event_type', key: 'event_type',
+      title: 'Event', dataIndex: 'eventType', key: 'eventType',
       render: (t: string) => <Tag color={EVENT_COLORS[t] || 'default'}>{t?.replace(/_/g, ' ').toUpperCase()}</Tag>
     },
     {
-      title: 'User', dataIndex: 'user_email', key: 'user_email',
+      title: 'User', dataIndex: 'userEmail', key: 'userEmail',
       render: (e: string) => e ? <Text style={{ fontSize: 12 }}>{e}</Text> : <Text type="secondary" style={{ fontSize: 12 }}>Anonymous</Text>
     },
     {
-      title: 'IP Address', dataIndex: 'ip_address', key: 'ip_address',
+      title: 'IP Address', dataIndex: 'ipAddress', key: 'ipAddress',
       render: (ip: string) => <Text code style={{ fontSize: 11 }}>{ip || '—'}</Text>
     },
     {
-      title: 'User Agent', dataIndex: 'user_agent', key: 'user_agent',
+      title: 'User Agent', dataIndex: 'userAgent', key: 'userAgent',
       ellipsis: true,
       render: (ua: string) => (
         <Tooltip title={ua}>
@@ -62,14 +62,14 @@ export default function AdminLogsPage() {
       )
     },
     {
-      title: 'Data', dataIndex: 'event_data', key: 'event_data',
+      title: 'Data', dataIndex: 'eventData', key: 'eventData',
       render: (d: any) => {
         if (!d || Object.keys(d).length === 0) return '—'
         return <Text code style={{ fontSize: 11 }}>{JSON.stringify(d).slice(0, 60)}</Text>
       }
     },
     {
-      title: 'Time', dataIndex: 'created_at', key: 'created_at',
+      title: 'Time', dataIndex: 'createdAt', key: 'createdAt',
       render: (d: string) => d ? new Date(d).toLocaleString() : '—'
     },
   ]

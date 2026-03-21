@@ -17,8 +17,10 @@ export default function LoginForm() {
     e.preventDefault()
     setError('')
     try {
-      await login(form.email, form.password)
-      router.push('/')
+      const user = await login(form.email, form.password)
+      if (user?.role === 'admin') router.push('/admin')
+      else if (user?.role === 'seller') router.push('/seller')
+      else router.push('/')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data?.error
         || (err as { response?: { data?: { message?: string } } })?.response?.data?.message

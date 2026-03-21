@@ -71,14 +71,23 @@ export class PaymentService {
       automatic_payment_methods: { enabled: true },
     })
 
-    // Upsert a pending payment record
-    await pool.query(
-      `INSERT INTO payments (order_id, payment_gateway, payment_method, amount, currency, status, transaction_id)
-       VALUES ($1, 'stripe', 'card', $2, $3, 'pending', $4)
-       ON CONFLICT (order_id) DO UPDATE
-         SET transaction_id = $4, status = 'pending', updated_at = CURRENT_TIMESTAMP`,
-      [data.orderId, order.total_amount, currency, intent.id]
+    // Upsert a pending payment record (check-then-insert/update to avoid needing unique constraint)
+    const existingPayment = await pool.query(
+      'SELECT id FROM payments WHERE order_id = $1 LIMIT 1',
+      [data.orderId]
     )
+    if (existingPayment.rows.length > 0) {
+      await pool.query(
+        `UPDATE payments SET transaction_id = $1, status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE order_id = $2`,
+        [intent.id, data.orderId]
+      )
+    } else {
+      await pool.query(
+        `INSERT INTO payments (order_id, payment_gateway, payment_method, amount, currency, status, transaction_id)
+         VALUES ($1, 'stripe', 'credit_card', $2, $3, 'pending', $4)`,
+        [data.orderId, order.total_amount, currency, intent.id]
+      )
+    }
 
     return {
       clientSecret: intent.client_secret!,
@@ -177,11 +186,14 @@ export class PaymentService {
              WHERE id = $1 AND status = 'placed'`,
             [orderId]
           )
-          await client.query(
-            `INSERT INTO order_status_history (order_id, status, notes) VALUES ($1, $2, $3)
-             ON CONFLICT DO NOTHING`,
-            [orderId, 'payment_confirmed', 'Payment confirmed via Stripe webhook']
-          )
+          try {
+            await client.query(
+              `INSERT INTO order_status_history (order_id, status, notes) VALUES ($1, $2, $3)`,
+              [orderId, 'payment_confirmed', 'Payment confirmed via Stripe webhook']
+            )
+          } catch {
+            // Ignore duplicate entry errors
+          }
           await client.query('COMMIT')
         } catch (err) {
           await client.query('ROLLBACK')

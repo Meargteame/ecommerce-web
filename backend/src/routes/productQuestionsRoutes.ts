@@ -114,8 +114,12 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     )
     
     if (sellerResult.rows.length > 0) {
-      // TODO: Create notification for seller
-      // notificationService.create({...})
+      const targetSellerId = sellerResult.rows[0].user_id
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, message)
+         VALUES ($1, $2, $3, $4)`,
+        [targetSellerId, 'system', 'New Product Question', 'A customer has asked a new question about your product.']
+      ).catch(e => console.error('Failed to send question notification'))
     }
     
     res.status(201).json({
@@ -182,7 +186,12 @@ router.post('/:questionId/answers', authenticate, async (req: AuthRequest, res: 
     )
     
     if (questionResult.rows.length > 0 && questionResult.rows[0].user_id !== userId) {
-      // TODO: Create notification
+      const askerId = questionResult.rows[0].user_id
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, message)
+         VALUES ($1, $2, $3, $4)`,
+        [askerId, 'system', 'Question Answered', 'Someone has answered your product question.']
+      ).catch(e => console.error('Failed to notify question asker:', e))
     }
     
     res.status(201).json({

@@ -4,6 +4,7 @@ interface UpdateProfileDTO {
   firstName?: string
   lastName?: string
   phone?: string
+  avatarUrl?: string
 }
 
 interface AddressDTO {
@@ -32,6 +33,7 @@ interface User {
   firstName?: string
   lastName?: string
   phone?: string
+  avatarUrl?: string
   emailVerified: boolean
   accountStatus: string
   role: string
@@ -42,7 +44,7 @@ interface User {
 export class UserService {
   async getProfile(userId: string): Promise<User | null> {
     const result = await pool.query(
-      `SELECT id, email, first_name, last_name, phone, email_verified,
+      `SELECT id, email, first_name, last_name, phone, avatar_url, email_verified,
               account_status, role, created_at, updated_at
        FROM users WHERE id = $1`,
       [userId]
@@ -52,7 +54,7 @@ export class UserService {
   }
 
   async updateProfile(userId: string, data: UpdateProfileDTO): Promise<User> {
-    const { firstName, lastName, phone } = data
+    const { firstName, lastName, phone, avatarUrl } = data
     const updates: string[] = []
     const values: any[] = []
     let p = 1
@@ -60,6 +62,7 @@ export class UserService {
     if (firstName !== undefined) { updates.push(`first_name = $${p++}`); values.push(firstName) }
     if (lastName !== undefined)  { updates.push(`last_name = $${p++}`);  values.push(lastName) }
     if (phone !== undefined)     { updates.push(`phone = $${p++}`);      values.push(phone) }
+    if (avatarUrl !== undefined) { updates.push(`avatar_url = $${p++}`); values.push(avatarUrl) }
 
     if (updates.length === 0) throw new Error('No fields to update')
 
@@ -68,7 +71,7 @@ export class UserService {
 
     const result = await pool.query(
       `UPDATE users SET ${updates.join(', ')} WHERE id = $${p}
-       RETURNING id, email, first_name, last_name, phone, email_verified,
+       RETURNING id, email, first_name, last_name, phone, avatar_url, email_verified,
                  account_status, role, created_at, updated_at`,
       values
     )
@@ -84,7 +87,7 @@ export class UserService {
     const result = await pool.query(
       `UPDATE users SET role = 'seller', updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
-       RETURNING id, email, first_name, last_name, phone, email_verified,
+       RETURNING id, email, first_name, last_name, phone, avatar_url, email_verified,
                  account_status, role, created_at, updated_at`,
       [userId]
     )
@@ -311,7 +314,7 @@ export class UserService {
 
     const [usersResult, countResult] = await Promise.all([
       pool.query(
-        `SELECT id, email, first_name, last_name, phone, email_verified,
+        `SELECT id, email, first_name, last_name, phone, avatar_url, email_verified,
                 account_status, role, created_at, updated_at
          FROM users ${where}
          ORDER BY created_at DESC
@@ -335,7 +338,7 @@ export class UserService {
     const result = await pool.query(
       `UPDATE users SET account_status = $1, updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
-       RETURNING id, email, first_name, last_name, phone, email_verified,
+       RETURNING id, email, first_name, last_name, phone, avatar_url, email_verified,
                  account_status, role, created_at, updated_at`,
       [status, userId]
     )
@@ -350,6 +353,7 @@ export class UserService {
       firstName: row.first_name,
       lastName: row.last_name,
       phone: row.phone,
+      avatarUrl: row.avatar_url,
       emailVerified: row.email_verified,
       accountStatus: row.account_status,
       role: row.role,

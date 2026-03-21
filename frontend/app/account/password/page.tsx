@@ -2,9 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Header from '@/components/layout/Header'
-import Footer from '@/components/layout/Footer'
-import CartDrawer from '@/components/cart/CartDrawer'
 import { useAuthStore } from '@/store/authStore'
 import api from '@/lib/api'
 import { Check, X, ShieldCheck } from 'lucide-react'
@@ -50,12 +47,8 @@ export default function PasswordPage() {
   if (!user) return null
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <Header />
-      <CartDrawer />
+    <>
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      
-      <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-16">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 pb-4 border-b border-gray-100 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Security Credentials</h1>
@@ -98,8 +91,6 @@ export default function PasswordPage() {
             </form>
           </div>
         </div>
-      </main>
-      <Footer />
-    </div>
+    </>
   )
 }

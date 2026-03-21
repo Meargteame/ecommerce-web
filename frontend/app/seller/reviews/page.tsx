@@ -45,7 +45,7 @@ export default function SellerReviewsPage() {
     try {
       await api.post(`/seller/reviews/${reviewId}/respond`, { response: responseText })
       setReviews(prev => prev.map(r =>
-        r.id === reviewId ? { ...r, seller_response: responseText, seller_response_at: new Date().toISOString() } : r
+        r.id === reviewId ? { ...r, sellerResponse: responseText, sellerResponseAt: new Date().toISOString() } : r
       ))
       setResponding(null)
       setResponseText('')
@@ -94,26 +94,26 @@ export default function SellerReviewsPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <StarRating rating={r.rating} />
-                    {r.is_verified_purchase && (
+                    {r.isVerifiedPurchase && (
                       <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
                         Verified Purchase
                       </span>
                     )}
                     <span className="text-xs text-gray-400">
-                      {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                   </div>
                   {r.title && <p className="font-semibold text-gray-900 mb-1">{r.title}</p>}
                   {r.comment && <p className="text-sm text-gray-600 leading-relaxed">{r.comment}</p>}
                   <div className="flex items-center gap-2 mt-2">
                     <span className="text-xs text-gray-400">
-                      by {r.first_name} {r.last_name?.charAt(0)}.
+                      by {r.firstName} {r.lastName?.charAt(0)}.
                     </span>
                     <span className="text-gray-200">·</span>
-                  <span className="text-xs font-medium" style={{color:'#7C3AED'}}>{r.product_name}</span>
+                  <span className="text-xs font-medium" style={{color:'#7C3AED'}}>{r.productName}</span>
                   </div>
                 </div>
-                {!r.seller_response && responding !== r.id && (
+                {!r.sellerResponse && responding !== r.id && (
                   <button
                     onClick={() => { setResponding(r.id); setResponseText('') }}
                     className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 border rounded-lg transition-colors shrink-0"
@@ -127,10 +127,10 @@ export default function SellerReviewsPage() {
               </div>
 
               {/* Existing response */}
-              {r.seller_response && (
+              {r.sellerResponse && (
                 <div className="mt-4 bg-purple-50 border border-purple-100 rounded-lg p-4">
                   <p className="text-xs font-semibold mb-1" style={{color:'#7C3AED'}}>Your response</p>
-                  <p className="text-sm text-gray-700">{r.seller_response}</p>
+                  <p className="text-sm text-gray-700">{r.sellerResponse}</p>
                 </div>
               )}
 

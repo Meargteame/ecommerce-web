@@ -59,12 +59,12 @@ export default function HeroSection() {
 
   return (
     <section className="w-full pt-6 pb-10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1920px] mx-auto px-6 lg:px-12">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Main hero slider */}
           <div className="lg:col-span-3 rounded-[2rem] overflow-hidden relative min-h-[400px] sm:min-h-[500px] shadow-2xl shadow-primary/10 group">
             <div className={`absolute inset-0 transition-all duration-700 ease-out ${animating ? 'scale-110 opacity-0' : 'scale-100 opacity-100'}`}>
-              <Image src={slide.image} alt={slide.title} fill className="object-cover transition-transform duration-[6000ms] group-hover:scale-110" priority />
+              <Image src={slide.image} alt={slide.title} fill sizes="100vw" className="object-cover transition-transform duration-[6000ms] group-hover:scale-110" priority />
               <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
             </div>
 
@@ -115,7 +115,7 @@ export default function HeroSection() {
           <div className="flex flex-col gap-6 lg:col-span-1">
             <div className="flex-1 rounded-[2rem] overflow-hidden relative group">
               <Image src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80"
-                alt="New arrivals" fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
+                alt="New arrivals" fill sizes="(max-width: 1024px) 100vw, 25vw" className="object-cover transition-transform duration-700 group-hover:scale-110" />
               <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors" />
               <div className="relative z-10 p-8 h-full flex flex-col justify-end">
                 <div>
@@ -131,7 +131,7 @@ export default function HeroSection() {
 
             <div className="flex-1 rounded-[2rem] overflow-hidden relative premium-gradient group">
               <Image src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&q=80"
-                alt="Sell on ShopHub" fill className="object-cover opacity-20 transition-transform duration-700 group-hover:scale-110" />
+                alt="Sell on ShopHub" fill sizes="(max-width: 1024px) 100vw, 25vw" className="object-cover opacity-20 transition-transform duration-700 group-hover:scale-110" />
               <div className="relative z-10 p-8 h-full flex flex-col justify-end">
                 <div>
                   <span className="text-[10px] font-bold text-white/70 uppercase tracking-[0.2em]">Sell on ShopHub</span>

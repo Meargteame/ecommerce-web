@@ -314,7 +314,18 @@ router.put('/:id/status', authenticate, authorize('admin', 'seller'), async (req
       throw new AppError('Return not found', 404)
     }
     
-    // TODO: Send notification to customer
+    // Create notification for customer
+    const returnReq = result.rows[0]
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, message)
+       VALUES ($1, $2, $3, $4)`,
+      [
+        returnReq.user_id, 
+        'system',
+        'Return Status Updated',
+        `Your return request #${returnReq.id.substring(0, 8)} status has been updated to: ${status}`
+      ]
+    ).catch(err => console.error('Failed to send return notification:', err))
     
     res.json({
       message: 'Return status updated',

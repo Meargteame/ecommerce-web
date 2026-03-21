@@ -13,39 +13,43 @@ import { ChevronRight, Package, Truck, CheckCircle, Clock, XCircle } from 'lucid
 
 interface OrderItem {
   id: string
-  product_name: string
+  product_name?: string
+  productName?: string
   quantity: number
-  unit_price: number
+  unit_price?: number
+  unitPrice?: number
   image_url?: string
+  imageUrl?: string
   slug?: string
 }
 
 interface OrderDetail {
   id: string
   status: string
-  total_amount: number
+  total_amount?: number
+  totalAmount?: number
   subtotal?: number
   shipping_cost?: number
-  created_at: string
-  updated_at: string
+  shippingCost?: number
+  created_at?: string
+  createdAt?: string
+  updated_at?: string
+  updatedAt?: string
   payment_method?: string
-  shipping_address?: {
-    first_name?: string
-    last_name?: string
-    street?: string
-    city?: string
-    state?: string
-    zip?: string
-    country?: string
-  }
+  paymentMethod?: string
+  shipping_address?: any
+  shippingAddress?: any
   items: OrderItem[]
   tracking_number?: string
+  trackingNumber?: string
 }
 
-const STATUS_STEPS = ['pending', 'processing', 'shipped', 'delivered']
+const STATUS_STEPS = ['placed', 'payment_confirmed', 'processing', 'shipped', 'delivered']
 
 const statusIcon: Record<string, React.ReactNode> = {
+  placed: <Clock className="h-5 w-5" />,
   pending: <Clock className="h-5 w-5" />,
+  payment_confirmed: <CheckCircle className="h-5 w-5" />,
   processing: <Package className="h-5 w-5" />,
   shipped: <Truck className="h-5 w-5" />,
   delivered: <CheckCircle className="h-5 w-5" />,
@@ -53,11 +57,23 @@ const statusIcon: Record<string, React.ReactNode> = {
 }
 
 const statusColor: Record<string, string> = {
+  placed: 'bg-yellow-100 text-yellow-700',
   pending: 'bg-yellow-100 text-yellow-700',
+  payment_confirmed: 'bg-emerald-100 text-emerald-700',
   processing: 'bg-blue-100 text-blue-700',
   shipped: 'bg-gray-100 text-gray-700',
   delivered: 'bg-green-100 text-green-700',
   cancelled: 'bg-red-100 text-red-700',
+}
+
+const statusLabel: Record<string, string> = {
+  placed: 'Order Placed',
+  pending: 'Pending',
+  payment_confirmed: 'Payment Confirmed',
+  processing: 'Processing',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
 }
 
 export default function OrderDetailPage() {
@@ -150,11 +166,11 @@ export default function OrderDetailPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Order #{order.id.slice(0, 8).toUpperCase()}</h1>
-            <p className="text-sm text-gray-500 mt-1">Placed on {new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <p className="text-sm text-gray-500 mt-1">Placed on {new Date(order.created_at || order.createdAt || '').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
           </div>
           <span className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full capitalize ${statusColor[order.status] || 'bg-gray-100 text-gray-600'}`}>
             {statusIcon[order.status]}
-            {order.status}
+            {statusLabel[order.status] || order.status}
           </span>
         </div>
 
@@ -176,16 +192,16 @@ export default function OrderDetailPage() {
                 </div>
               ))}
             </div>
-            {order.tracking_number && (
+            {(order.tracking_number || order.trackingNumber) && (
               <p className="text-sm text-gray-600 mt-4 text-center">
-                Tracking: <span className="font-mono font-medium text-gray-900">{order.tracking_number}</span>
+                Tracking: <span className="font-mono font-medium text-gray-900">{order.tracking_number || order.trackingNumber}</span>
               </p>
             )}
           </div>
         )}
 
         {/* Cancel order */}
-        {(order.status === 'pending' || order.status === 'processing') && (
+        {(order.status === 'placed' || order.status === 'pending' || order.status === 'payment_confirmed' || order.status === 'processing') && (
           <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-gray-900">Need to cancel?</p>
@@ -208,35 +224,38 @@ export default function OrderDetailPage() {
                 {(order.items || []).map((item) => (
                   <div key={item.id} className="flex gap-4">
                     <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                      {item.image_url ? (
-                        <Image src={item.image_url} alt={item.product_name} fill className="object-cover" />
+                      {(item.image_url || item.imageUrl) ? (
+                        <Image src={(item.image_url || item.imageUrl)!} alt={item.product_name || item.productName || 'Product'} fill className="object-cover" />
                       ) : (
                         <div className="w-full h-full bg-gray-200" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm">{item.product_name}</p>
+                      <p className="font-medium text-gray-900 text-sm">{item.product_name || item.productName}</p>
                       <p className="text-xs text-gray-500 mt-0.5">Qty: {item.quantity}</p>
                     </div>
                     <p className="font-semibold text-gray-900 text-sm shrink-0">
-                      ${(item.unit_price * item.quantity).toFixed(2)}
+                      ${((item.unit_price || item.unitPrice || 0) * item.quantity).toFixed(2)}
                     </p>
                   </div>
                 ))}
               </div>
             </div>
 
-            {addr && (
+            {(addr || order.shippingAddress) && (() => {
+              const a = addr || order.shippingAddress
+              return (
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 className="font-semibold text-gray-900 mb-3">Shipping Address</h2>
                 <div className="text-sm text-gray-600 space-y-0.5">
-                  <p className="font-medium text-gray-900">{addr.first_name} {addr.last_name}</p>
-                  <p>{addr.street}</p>
-                  <p>{addr.city}, {addr.state} {addr.zip}</p>
-                  <p>{addr.country}</p>
+                  <p className="font-medium text-gray-900">{a.fullName || a.full_name || [a.first_name, a.last_name].filter(Boolean).join(' ')}</p>
+                  <p>{a.addressLine1 || a.address_line1 || a.street}</p>
+                  <p>{[a.city, a.state, a.postalCode || a.postal_code || a.zip].filter(Boolean).join(', ')}</p>
+                  <p>{a.country}</p>
                 </div>
               </div>
-            )}
+              )
+            })()}
           </div>
 
           {/* Summary */}
@@ -258,7 +277,7 @@ export default function OrderDetailPage() {
                   </div>
                 )}
                 <div className="border-t border-gray-200 pt-2 flex justify-between font-bold text-gray-900">
-                  <span>Total</span><span>${Number(order.total_amount).toFixed(2)}</span>
+                  <span>Total</span><span>${Number(order.total_amount || order.totalAmount || 0).toFixed(2)}</span>
                 </div>
               </div>
               {order.payment_method && (

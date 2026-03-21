@@ -89,6 +89,8 @@ export const createProductSchema = z.object({
   categoryId: z.string().uuid('Invalid category ID'),
   brand: z.string().max(100).optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
+  stockQuantity: z.number().int().nonnegative().optional(),
+  price: z.number().positive().optional(),
 })
 
 export const updateProductSchema = createProductSchema.partial()
@@ -134,6 +136,7 @@ export const createOrderSchema = z.object({
   billingAddress: orderAddressSchema,
   customerEmail: z.string().email(),
   customerPhone: z.string().regex(/^\+?[1-9]\d{1,14}$/).optional(),
+  promoCode: z.string().optional(),
   notes: z.string().max(500).optional(),
 })
 

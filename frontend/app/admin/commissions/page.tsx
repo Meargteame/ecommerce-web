@@ -18,7 +18,7 @@ export default function AdminCommissionsPage() {
     try {
       const { data: res } = await api.get('/admin/commissions')
       setData(res.data || {})
-      setRate(parseFloat(res.data?.commission_rate || '10'))
+      setRate(parseFloat(res.data?.commissionRate || '10'))
     } catch { /* ignore */ }
     setLoading(false)
   }
@@ -41,17 +41,17 @@ export default function AdminCommissionsPage() {
       title: 'Seller', key: 'seller',
       render: (_: any, r: any) => (
         <div>
-          <Text strong style={{ display: 'block' }}>{r.store_name || `${r.first_name} ${r.last_name}`}</Text>
+          <Text strong style={{ display: 'block' }}>{r.storeName || `${r.firstName} ${r.lastName}`}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>{r.email}</Text>
         </div>
       )
     },
-    { title: 'Orders', dataIndex: 'order_count', key: 'order_count', render: (v: number) => v ?? 0 },
-    { title: 'Seller Revenue', dataIndex: 'seller_revenue', key: 'seller_revenue', render: (v: number) => '$' + Number(v || 0).toFixed(2) },
+    { title: 'Orders', dataIndex: 'orderCount', key: 'orderCount', render: (v: number) => v ?? 0 },
+    { title: 'Seller Revenue', dataIndex: 'sellerRevenue', key: 'sellerRevenue', render: (v: number) => '$' + Number(v || 0).toFixed(2) },
     {
-      title: 'Commission Owed', dataIndex: 'commission_owed', key: 'commission_owed',
+      title: 'Commission Owed', dataIndex: 'commissionOwed', key: 'commissionOwed',
       render: (v: number) => <Tag color="purple">${Number(v || 0).toFixed(2)}</Tag>,
-      sorter: (a: any, b: any) => a.commission_owed - b.commission_owed,
+      sorter: (a: any, b: any) => a.commissionOwed - b.commissionOwed,
       defaultSortOrder: 'descend' as const,
     },
   ]
@@ -63,17 +63,17 @@ export default function AdminCommissionsPage() {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
           <Card loading={loading}>
-            <Statistic title="Gross Revenue" value={'$' + Number(summary.gross_revenue || 0).toFixed(2)} prefix={<DollarOutlined style={{ color: '#7c3aed' }} />} />
+            <Statistic title="Gross Revenue" value={'$' + Number(summary.grossRevenue || 0).toFixed(2)} prefix={<DollarOutlined style={{ color: '#7c3aed' }} />} />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
           <Card loading={loading}>
-            <Statistic title="Platform Commission" value={'$' + Number(summary.total_commission || 0).toFixed(2)} prefix={<PercentageOutlined style={{ color: '#059669' }} />} />
+            <Statistic title="Platform Commission" value={'$' + Number(summary.totalCommission || 0).toFixed(2)} prefix={<PercentageOutlined style={{ color: '#059669' }} />} />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
           <Card loading={loading}>
-            <Statistic title="Total Orders" value={summary.total_orders || 0} prefix={<ShoppingOutlined style={{ color: '#d97706' }} />} />
+            <Statistic title="Total Orders" value={summary.totalOrders || 0} prefix={<ShoppingOutlined style={{ color: '#d97706' }} />} />
           </Card>
         </Col>
       </Row>

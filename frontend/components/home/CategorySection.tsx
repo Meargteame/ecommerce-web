@@ -15,7 +15,7 @@ const categories = [
 
 export default function CategorySection() {
   return (
-    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <section className="max-w-[1920px] mx-auto px-6 lg:px-12 py-12">
       <div className="flex items-end justify-between mb-8">
         <div>
           <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight leading-none mb-2">
@@ -35,7 +35,7 @@ export default function CategorySection() {
         {categories.map((cat) => (
           <Link key={cat.label} href={cat.href} className="group flex flex-col items-center gap-4 text-center">
             <div className="w-full aspect-square rounded-[2rem] overflow-hidden bg-white shadow-sm border border-gray-100 relative group-hover:shadow-xl group-hover:shadow-primary/10 group-hover:-translate-y-2 transition-all duration-300">
-              <Image src={cat.image} alt={cat.label} fill
+              <Image src={cat.image} alt={cat.label} fill sizes="(max-width: 768px) 100vw, (max-width: 1200px) 25vw, 12vw"
                 className="object-cover group-hover:scale-110 transition-transform duration-500" />
             </div>
             <span className="text-sm font-bold text-gray-700 group-hover:text-primary transition-colors tracking-tight">

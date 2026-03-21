@@ -27,23 +27,23 @@ export default function AdminDashboard() {
   }, [])
 
   const statCards = [
-    { title: 'Total Revenue', value: '$' + Number(stats.total_revenue || 0).toLocaleString('en', { minimumFractionDigits: 2 }), icon: <DollarOutlined />, color: '#7c3aed' },
-    { title: 'Platform Commission', value: '$' + Number(stats.platform_commission || 0).toLocaleString('en', { minimumFractionDigits: 2 }), icon: <PercentageOutlined />, color: '#059669' },
-    { title: 'Total Orders', value: stats.total_orders || 0, icon: <ShoppingOutlined />, color: '#7c3aed' },
-    { title: 'Total Users', value: stats.total_users || 0, icon: <UserOutlined />, color: '#0891b2' },
-    { title: 'Active Sellers', value: stats.total_sellers || 0, icon: <ShopOutlined />, color: '#d97706' },
-    { title: 'Total Products', value: stats.total_products || 0, icon: <AppstoreOutlined />, color: '#dc2626' },
+    { title: 'Total Revenue', value: '$' + Number(stats.totalRevenue || 0).toLocaleString('en', { minimumFractionDigits: 2 }), icon: <DollarOutlined />, color: '#7c3aed' },
+    { title: 'Platform Commission', value: '$' + Number(stats.platformCommission || 0).toLocaleString('en', { minimumFractionDigits: 2 }), icon: <PercentageOutlined />, color: '#059669' },
+    { title: 'Total Orders', value: stats.totalOrders || 0, icon: <ShoppingOutlined />, color: '#7c3aed' },
+    { title: 'Total Users', value: stats.totalUsers || 0, icon: <UserOutlined />, color: '#0891b2' },
+    { title: 'Active Sellers', value: stats.totalSellers || 0, icon: <ShopOutlined />, color: '#d97706' },
+    { title: 'Total Products', value: stats.totalProducts || 0, icon: <AppstoreOutlined />, color: '#dc2626' },
   ]
 
   const columns = [
-    { title: 'Order', dataIndex: 'order_number', key: 'order_number', render: (n: string, r: any) => <Typography.Text code>#{n || r.id?.slice(0, 8)}</Typography.Text> },
-    { title: 'Customer', dataIndex: 'customer_email', key: 'customer_email', render: (e: string) => e || '—' },
-    { title: 'Total', dataIndex: 'total_amount', key: 'total_amount', render: (v: number) => '$' + Number(v || 0).toFixed(2) },
+    { title: 'Order', dataIndex: 'orderNumber', key: 'orderNumber', render: (n: string, r: any) => <Typography.Text code>#{n || r.id?.slice(0, 8)}</Typography.Text> },
+    { title: 'Customer', dataIndex: 'customerEmail', key: 'customerEmail', render: (e: string) => e || '—' },
+    { title: 'Total', dataIndex: 'totalAmount', key: 'totalAmount', render: (v: number) => '$' + Number(v || 0).toFixed(2) },
     {
       title: 'Status', dataIndex: 'status', key: 'status',
       render: (s: string) => <Tag color={STATUS_COLORS[s] || 'default'}>{s?.toUpperCase()}</Tag>
     },
-    { title: 'Date', dataIndex: 'created_at', key: 'created_at', render: (d: string) => d ? new Date(d).toLocaleDateString() : '—' },
+    { title: 'Date', dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => d ? new Date(d).toLocaleDateString() : '—' },
   ]
 
   return (
@@ -67,7 +67,7 @@ export default function AdminDashboard() {
       <Card title="Recent Orders" loading={loading}>
         <Table
           columns={columns}
-          dataSource={stats.recent_orders || []}
+          dataSource={stats.recentOrders || []}
           rowKey="id"
           pagination={false}
           size="small"

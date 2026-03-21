@@ -247,7 +247,6 @@ export default function AuthModal() {
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-5">
-              {/* Register content is more complex, but let's apply the premium style to its pieces */}
               <div className="flex items-center justify-between px-1">
                 <span className="text-xs text-gray-500 font-bold">{email}</span>
                 <button type="button" onClick={() => setEmailSubmitted(false)} className="text-xs text-primary font-bold hover:underline">Change</button>
@@ -279,16 +278,25 @@ export default function AuthModal() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Password</label>
-                <div className="relative">
-                  <input type={showRegPw ? 'text' : 'password'} value={regForm.password} onChange={setReg('password')} onFocus={() => setShowRules(true)} placeholder="Min. 8 chars" className={inputClass} required />
-                  <button type="button" onClick={() => setShowRegPw(!showRegPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900">
-                    {showRegPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Password</label>
+                  <div className="relative">
+                    <input type={showRegPw ? 'text' : 'password'} value={regForm.password} onChange={setReg('password')} onFocus={() => setShowRules(true)} placeholder="Min. 8 chars" className={inputClass} required />
+                    <button type="button" onClick={() => setShowRegPw(!showRegPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900">
+                      {showRegPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
-                {showRules && regForm.password && (
-                  <div className="p-3 bg-gray-50 rounded-xl grid grid-cols-2 gap-2 mt-2">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Confirm</label>
+                  <div className="relative">
+                    <input type={showRegPw ? 'text' : 'password'} value={regForm.confirm} onChange={setReg('confirm')} placeholder="Repeat it" className={inputClass} required />
+                  </div>
+                </div>
+              </div>
+              {showRules && regForm.password && (
+                <div className="p-3 bg-gray-50 rounded-xl grid grid-cols-2 gap-2 mt-2">
                     {passwordRules.map((rule) => {
                       const ok = rule.test(regForm.password)
                       return (
@@ -300,8 +308,6 @@ export default function AuthModal() {
                     })}
                   </div>
                 )}
-              </div>
-
               <button
                 type="submit"
                 disabled={loading}

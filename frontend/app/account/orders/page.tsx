@@ -1,19 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Header from '@/components/layout/Header'
-import Footer from '@/components/layout/Footer'
-import CartDrawer from '@/components/cart/CartDrawer'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/authStore'
 import api from '@/lib/api'
 import { Package, ChevronRight, Truck, CheckCircle, Clock } from 'lucide-react'
 
-interface Order { id: string; status: string; total_amount: number; created_at: string; item_count: number }
+interface Order { id: string; status: string; total_amount?: number; totalAmount?: number; created_at?: string; createdAt?: string; item_count?: number; order_number?: string; orderNumber?: string }
 
 const statusConfig: Record<string, { icon: React.ReactNode, color: string, label: string }> = {
+  placed: { icon: <Clock className="h-4 w-4" />, color: 'bg-yellow-50 text-yellow-700 border-yellow-200', label: 'Order Placed' },
   pending: { icon: <Clock className="h-4 w-4" />, color: 'bg-yellow-50 text-yellow-700 border-yellow-200', label: 'Processing' },
+  payment_confirmed: { icon: <CheckCircle className="h-4 w-4" />, color: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Payment Confirmed' },
   processing: { icon: <Package className="h-4 w-4" />, color: 'bg-blue-50 text-blue-700 border-blue-200', label: 'Preparing Ship' },
   shipped: { icon: <Truck className="h-4 w-4" />, color: 'bg-indigo-50 text-indigo-700 border-indigo-200', label: 'In Transit' },
   delivered: { icon: <CheckCircle className="h-4 w-4" />, color: 'bg-green-50 text-green-700 border-green-200', label: 'Delivered' },
@@ -29,7 +28,11 @@ export default function OrdersPage() {
   useEffect(() => {
     if (!user) { router.push('/'); return }
     api.get('/orders')
-      .then(({ data }) => setOrders(data.data?.orders || []))
+      .then(({ data }) => {
+        // Backend returns { data: [...orders] } directly, not { data: { orders: [...] } }
+        const orders = Array.isArray(data.data) ? data.data : (data.data?.orders || [])
+        setOrders(orders)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [user, router])
@@ -37,10 +40,7 @@ export default function OrdersPage() {
   if (!user) return null
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <Header />
-      <CartDrawer />
-      <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-16">
+    <>
         <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 pb-4 border-b border-gray-100 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Order History</h1>
@@ -77,20 +77,23 @@ export default function OrdersPage() {
                     <div className="flex items-center gap-8">
                       <div>
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Order Placed</p>
-                        <p className="text-sm font-medium text-gray-900 mt-0.5">{new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                        <p className="text-sm font-medium text-gray-900 mt-0.5">{new Date(order.created_at || order.createdAt || '').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                       </div>
                       <div>
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total</p>
-                        <p className="text-sm font-medium text-gray-900 mt-0.5">${Number(order.total_amount).toFixed(2)}</p>
+                        <p className="text-sm font-medium text-gray-900 mt-0.5">${Number(order.total_amount || order.totalAmount || 0).toFixed(2)}</p>
                       </div>
                       <div className="hidden sm:block">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Items</p>
-                        <p className="text-sm font-medium text-gray-900 mt-0.5">{order.item_count}</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Order #</p>
+                        <p className="text-sm font-medium text-gray-900 mt-0.5 font-mono">{(order.orderNumber || order.order_number || order.id.slice(0, 10)).toUpperCase()}</p>
                       </div>
                     </div>
                     <div className="flex flex-col md:items-end">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Order #</p>
-                      <p className="text-sm font-medium text-gray-900 mt-0.5 font-mono">{order.id.slice(0, 10).toUpperCase()}</p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</p>
+                      <div className={`mt-1 px-3 py-1 rounded-full border text-xs font-bold flex items-center gap-1.5 ${conf.color}`}>
+                        {conf.icon}
+                        {conf.label}
+                      </div>
                     </div>
                   </div>
                   
@@ -114,8 +117,6 @@ export default function OrdersPage() {
             })}
           </div>
         )}
-      </main>
-      <Footer />
-    </div>
+    </>
   )
 }

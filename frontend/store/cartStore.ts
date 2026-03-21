@@ -40,7 +40,18 @@ export const useCartStore = create<CartState>((set, get) => ({
     set({ loading: true })
     try {
       const { data } = await api.get('/cart')
-      set({ items: data.data?.items || [], loading: false })
+      // Flatten the nested backend response (item.product.name -> item.name)
+      const mappedItems = (data.data?.items || []).map((item: any) => ({
+        id: item.id,
+        product_id: item.productId,
+        variant_id: item.variantId,
+        name: item.product.name,
+        price: item.unitPrice,
+        quantity: item.quantity,
+        image_url: item.product.imageUrl,
+        slug: item.product.slug,
+      }))
+      set({ items: mappedItems, loading: false })
     } catch {
       set({ loading: false })
     }
@@ -48,7 +59,8 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   addItem: async (productId, quantity, variantId) => {
     try {
-      await api.post('/cart/items', { product_id: productId, quantity, variant_id: variantId })
+      // Use camelCase to match backend Zod schema
+      await api.post('/cart/items', { productId, quantity, variantId })
       await get().fetchCart()
       set({ open: true })
     } catch (err) {

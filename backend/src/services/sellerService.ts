@@ -7,6 +7,14 @@ interface SellerProfile {
   storeName: string
   storeDescription?: string
   storeLogoUrl?: string
+  storeBannerUrl?: string
+  businessAddress?: string
+  taxId?: string
+  socialFacebook?: string
+  socialInstagram?: string
+  socialTwitter?: string
+  returnPolicy?: string
+  shippingPolicy?: string
   contactEmail?: string
   contactPhone?: string
   payoutEmail?: string
@@ -23,6 +31,14 @@ interface UpdateProfileDTO {
   storeName?: string
   storeDescription?: string
   storeLogoUrl?: string
+  storeBannerUrl?: string
+  businessAddress?: string
+  taxId?: string
+  socialFacebook?: string
+  socialInstagram?: string
+  socialTwitter?: string
+  returnPolicy?: string
+  shippingPolicy?: string
   contactEmail?: string
   contactPhone?: string
   payoutEmail?: string
@@ -54,6 +70,14 @@ export class SellerService {
       ['storeName', 'store_name'],
       ['storeDescription', 'store_description'],
       ['storeLogoUrl', 'store_logo_url'],
+      ['storeBannerUrl', 'store_banner_url'],
+      ['businessAddress', 'business_address'],
+      ['taxId', 'tax_id'],
+      ['socialFacebook', 'social_facebook'],
+      ['socialInstagram', 'social_instagram'],
+      ['socialTwitter', 'social_twitter'],
+      ['returnPolicy', 'return_policy'],
+      ['shippingPolicy', 'shipping_policy'],
       ['contactEmail', 'contact_email'],
       ['contactPhone', 'contact_phone'],
       ['payoutEmail', 'payout_email'],
@@ -94,7 +118,11 @@ export class SellerService {
     ])
 
     return {
-      products: productsResult.rows,
+      products: productsResult.rows.map(row => ({
+        ...(productService as any).mapProduct(row),
+        imageUrl: row.image_url,
+        categoryName: row.category_name
+      })),
       total: parseInt(countResult.rows[0].count),
     }
   }
@@ -122,13 +150,20 @@ export class SellerService {
     ])
 
     return {
-      orders: ordersResult.rows,
+      orders: ordersResult.rows.map(r => ({
+        id: r.id,
+        orderNumber: r.order_number,
+        status: r.status,
+        totalAmount: parseFloat(r.total_amount),
+        customerEmail: r.customer_email,
+        createdAt: r.created_at
+      })),
       total: parseInt(countResult.rows[0].count),
     }
   }
 
   async getDashboardStats(sellerId: string): Promise<any> {
-    const [productCount, orderStats, revenueStats] = await Promise.all([
+    const [productCount, orderStats, revenueStats, currentMonthRevenue, lastMonthRevenue, currentMonthOrders, lastMonthOrders] = await Promise.all([
       pool.query('SELECT COUNT(*) FROM products WHERE seller_id = $1', [sellerId]),
       pool.query(
         `SELECT COUNT(DISTINCT o.id) as total_orders
@@ -146,12 +181,64 @@ export class SellerService {
          WHERE p.seller_id = $1 AND o.status != 'cancelled'`,
         [sellerId]
       ),
+      // Last 30 days revenue
+      pool.query(
+        `SELECT COALESCE(SUM(oi.subtotal), 0) as revenue
+         FROM order_items oi
+         JOIN products p ON p.id = oi.product_id
+         JOIN orders o ON o.id = oi.order_id
+         WHERE p.seller_id = $1 AND o.status != 'cancelled'
+         AND o.created_at >= NOW() - INTERVAL '30 days'`,
+        [sellerId]
+      ),
+      // 30-60 days ago revenue
+      pool.query(
+        `SELECT COALESCE(SUM(oi.subtotal), 0) as revenue
+         FROM order_items oi
+         JOIN products p ON p.id = oi.product_id
+         JOIN orders o ON o.id = oi.order_id
+         WHERE p.seller_id = $1 AND o.status != 'cancelled'
+         AND o.created_at >= NOW() - INTERVAL '60 days'
+         AND o.created_at < NOW() - INTERVAL '30 days'`,
+        [sellerId]
+      ),
+      // Last 30 days orders
+      pool.query(
+        `SELECT COUNT(DISTINCT o.id) as orders
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id
+         JOIN products p ON p.id = oi.product_id
+         WHERE p.seller_id = $1 AND o.created_at >= NOW() - INTERVAL '30 days'`,
+        [sellerId]
+      ),
+      // 30-60 days ago orders
+      pool.query(
+        `SELECT COUNT(DISTINCT o.id) as orders
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id
+         JOIN products p ON p.id = oi.product_id
+         WHERE p.seller_id = $1 AND o.created_at >= NOW() - INTERVAL '60 days'
+         AND o.created_at < NOW() - INTERVAL '30 days'`,
+        [sellerId]
+      ),
     ])
+
+    const currRev = parseFloat(currentMonthRevenue.rows[0].revenue)
+    const lastRev = parseFloat(lastMonthRevenue.rows[0].revenue)
+    const revTrend = lastRev > 0 ? ((currRev - lastRev) / lastRev) * 100 : 0
+
+    const currOrd = parseInt(currentMonthOrders.rows[0].orders)
+    const lastOrd = parseInt(lastMonthOrders.rows[0].orders)
+    const ordTrend = lastOrd > 0 ? ((currOrd - lastOrd) / lastOrd) : 0
 
     return {
       totalProducts: parseInt(productCount.rows[0].count),
       totalOrders: parseInt(orderStats.rows[0].total_orders),
       totalRevenue: parseFloat(revenueStats.rows[0].total_revenue),
+      revenueTrend: revTrend.toFixed(1),
+      ordersTrend: currOrd - lastOrd,
+      viewCount: 0, // Placeholder for future enhancement
+      conversionRate: 0, // Placeholder for future enhancement
     }
   }
 
@@ -205,7 +292,17 @@ export class SellerService {
        ORDER BY p.stock_quantity ASC`,
       [sellerId]
     )
-    return result.rows
+    return result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      sku: row.sku,
+      stockQuantity: row.stock_quantity,
+      status: row.status,
+      basePrice: parseFloat(row.base_price),
+      price: parseFloat(row.price || row.base_price),
+      imageUrl: row.image_url,
+      categoryName: row.category_name
+    }))
   }
 
   async updateStock(productId: string, sellerId: string, stockQuantity: number): Promise<any> {
@@ -215,27 +312,35 @@ export class SellerService {
       'UPDATE products SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, name, stock_quantity',
       [stockQuantity, productId]
     )
-    return result.rows[0]
+    return {
+      id: result.rows[0].id,
+      name: result.rows[0].name,
+      stockQuantity: result.rows[0].stock_quantity
+    }
   }
 
   async getEarnings(sellerId: string): Promise<any> {
+    const rateResult = await pool.query(`SELECT value FROM platform_settings WHERE key = 'commission_rate' LIMIT 1`)
+    const rate = parseFloat(rateResult.rows[0]?.value || '10') / 100
+    const netRate = 1 - rate
+
     const [total, monthly, recent] = await Promise.all([
       pool.query(
         `SELECT
            COALESCE(SUM(oi.subtotal), 0) as gross_revenue,
-           COALESCE(SUM(oi.subtotal * 0.9), 0) as net_revenue,
-           COALESCE(SUM(oi.subtotal * 0.1), 0) as platform_fee,
+           COALESCE(SUM(oi.subtotal * $2), 0) as net_revenue,
+           COALESCE(SUM(oi.subtotal * $3), 0) as platform_fee,
            COUNT(DISTINCT o.id) as total_orders
          FROM order_items oi
          JOIN products p ON p.id = oi.product_id
          JOIN orders o ON o.id = oi.order_id
          WHERE p.seller_id = $1 AND o.status NOT IN ('cancelled', 'refunded')`,
-        [sellerId]
+        [sellerId, netRate, rate]
       ),
       pool.query(
         `SELECT
            DATE_TRUNC('month', o.created_at) as month,
-           COALESCE(SUM(oi.subtotal * 0.9), 0) as net_revenue,
+           COALESCE(SUM(oi.subtotal * $2), 0) as net_revenue,
            COUNT(DISTINCT o.id) as orders
          FROM order_items oi
          JOIN products p ON p.id = oi.product_id
@@ -244,12 +349,12 @@ export class SellerService {
            AND o.created_at >= NOW() - INTERVAL '6 months'
          GROUP BY DATE_TRUNC('month', o.created_at)
          ORDER BY month DESC`,
-        [sellerId]
+        [sellerId, netRate]
       ),
       pool.query(
         `SELECT o.order_number, o.created_at, o.status,
-                COALESCE(SUM(oi.subtotal * 0.9), 0) as net_amount,
-                COALESCE(SUM(oi.subtotal * 0.1), 0) as fee
+                COALESCE(SUM(oi.subtotal * $2), 0) as net_amount,
+                COALESCE(SUM(oi.subtotal * $3), 0) as fee
          FROM order_items oi
          JOIN products p ON p.id = oi.product_id
          JOIN orders o ON o.id = oi.order_id
@@ -257,14 +362,30 @@ export class SellerService {
          GROUP BY o.id, o.order_number, o.created_at, o.status
          ORDER BY o.created_at DESC
          LIMIT 10`,
-        [sellerId]
+        [sellerId, netRate, rate]
       ),
     ])
 
     return {
-      summary: total.rows[0],
-      monthly: monthly.rows,
-      recentPayouts: recent.rows,
+      summary: {
+        grossRevenue: parseFloat(total.rows[0].gross_revenue),
+        netRevenue: parseFloat(total.rows[0].net_revenue),
+        platformFee: parseFloat(total.rows[0].platform_fee),
+        totalOrders: parseInt(total.rows[0].total_orders),
+        commissionRate: rate * 100
+      },
+      monthly: monthly.rows.map(r => ({
+        month: r.month,
+        netRevenue: parseFloat(r.net_revenue),
+        orders: parseInt(r.orders)
+      })),
+      recentPayouts: recent.rows.map(r => ({
+        orderNumber: r.order_number,
+        createdAt: r.created_at,
+        status: r.status,
+        netAmount: parseFloat(r.net_amount),
+        fee: parseFloat(r.fee)
+      })),
     }
   }
 
@@ -292,7 +413,20 @@ export class SellerService {
     ])
 
     return {
-      reviews: reviews.rows,
+      reviews: reviews.rows.map(r => ({
+        id: r.id,
+        rating: r.rating,
+        title: r.title,
+        comment: r.comment,
+        isVerifiedPurchase: r.is_verified_purchase,
+        createdAt: r.created_at,
+        sellerResponse: r.seller_response,
+        sellerResponseAt: r.seller_response_at,
+        productName: r.product_name,
+        productId: r.product_id,
+        firstName: r.first_name,
+        lastName: r.last_name
+      })),
       total: parseInt(count.rows[0].count),
     }
   }
@@ -311,7 +445,12 @@ export class SellerService {
        WHERE id = $2 RETURNING *`,
       [response, reviewId]
     )
-    return result.rows[0]
+    const row = result.rows[0]
+    return {
+      id: row.id,
+      sellerResponse: row.seller_response,
+      sellerResponseAt: row.seller_response_at
+    }
   }
 
   private mapProfile(row: any): SellerProfile {
@@ -321,6 +460,14 @@ export class SellerService {
       storeName: row.store_name,
       storeDescription: row.store_description,
       storeLogoUrl: row.store_logo_url,
+      storeBannerUrl: row.store_banner_url,
+      businessAddress: row.business_address,
+      taxId: row.tax_id,
+      socialFacebook: row.social_facebook,
+      socialInstagram: row.social_instagram,
+      socialTwitter: row.social_twitter,
+      returnPolicy: row.return_policy,
+      shippingPolicy: row.shipping_policy,
       contactEmail: row.contact_email,
       contactPhone: row.contact_phone,
       payoutEmail: row.payout_email,

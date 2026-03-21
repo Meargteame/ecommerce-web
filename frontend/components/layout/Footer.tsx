@@ -1,87 +1,107 @@
 import Link from 'next/link'
-import { Facebook, Twitter, Instagram, Youtube } from 'lucide-react'
+import { Facebook, Twitter, Instagram, Youtube, ShoppingBag, ArrowRight } from 'lucide-react'
 
 const links = {
   Shop: [
     { label: 'All Products', href: '/products' },
     { label: 'New Arrivals', href: '/products?sort=newest' },
-    { label: 'Sale', href: '/products?sale=true' },
+    { label: 'Sale & Clearance', href: '/products?sale=true' },
     { label: 'Electronics', href: '/products?category=electronics' },
-    { label: 'Fashion', href: '/products?category=fashion' },
+    { label: 'Fashion Edit', href: '/products?category=fashion' },
   ],
   Support: [
     { label: 'Help Center', href: '/help' },
-    { label: 'Track Order', href: '/track-order' },
+    { label: 'Track Your Order', href: '/track-order' },
     { label: 'Returns & Refunds', href: '/help' },
-    { label: 'Contact Us', href: '/help' },
+    { label: 'Contact Support', href: '/help' },
     { label: 'Buyer Protection', href: '/help' },
   ],
   Sell: [
-    { label: 'Sell on ShopHub', href: '/sell' },
-    { label: 'Seller Center', href: '/seller' },
-    { label: 'Seller Policies', href: '/terms' },
+    { label: 'Become a Seller', href: '/sell' },
+    { label: 'Seller Dashboard', href: '/seller' },
+    { label: 'Seller Requirements', href: '/terms' },
+    { label: 'Marketplace Fees', href: '/help' },
   ],
   Company: [
-    { label: 'About Us', href: '/about' },
+    { label: 'Our Story', href: '/about' },
     { label: 'Privacy Policy', href: '/privacy' },
     { label: 'Terms of Service', href: '/terms' },
+    { label: 'Careers', href: '/about' },
   ],
 }
 
 export default function Footer() {
   return (
-    <footer className="w-full px-4 sm:px-6 lg:px-8 pb-6 mt-2">
-      <div className="bg-gray-950 rounded-3xl text-gray-400 px-8 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
-          {/* Brand */}
-          <div className="col-span-2 md:col-span-1">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-9 h-9 bg-gradient-to-br from-violet-500 to-violet-700 rounded-2xl flex items-center justify-center">
-                <span className="text-white font-black text-base">S</span>
+    <footer className="w-full bg-white pt-20 pb-10 mt-0 border-t border-gray-100 relative overflow-hidden">
+      {/* Background Decorative Element */}
+      <div className="absolute bottom-0 left-0 w-[50rem] h-[50rem] bg-primary/5 blur-[150px] rounded-full translate-y-1/2 -translate-x-1/4 pointer-events-none" />
+
+      <div className="max-w-[1920px] mx-auto px-6 lg:px-12 relative z-10">
+        <div className="grid grid-cols-1 xl:grid-cols-6 gap-16 xl:gap-24 mb-20">
+          {/* Brand Discovery */}
+          <div className="xl:col-span-2">
+            <Link href="/" className="flex items-center gap-3 mb-8 group">
+              <div className="w-12 h-12 premium-gradient rounded-2xl flex items-center justify-center shadow-xl shadow-primary/20 group-hover:scale-110 transition-transform duration-300">
+                <ShoppingBag className="text-white h-6 w-6" />
               </div>
-              <span className="text-white font-extrabold text-xl tracking-tight">
-                Shop<span className="text-violet-500">Hub</span>
-              </span>
-            </div>
-            <p className="text-sm leading-relaxed mb-5 text-gray-500">
-              Your one-stop marketplace for everything. Millions of products from thousands of trusted sellers.
+              <div className="flex flex-col">
+                <span className="text-gray-900 font-black text-2xl tracking-tighter leading-none">ShopHub</span>
+                <span className="text-[10px] text-primary/70 font-black uppercase tracking-[0.4em] leading-none mt-1.5 transition-colors group-hover:text-primary">Premium Store</span>
+              </div>
+            </Link>
+            
+            <p className="text-lg text-gray-500 font-medium leading-relaxed mb-10 max-w-md">
+              The destination for <span className="text-gray-900">extraordinary finds</span> and world-class service. Empowering local sellers, delighting global buyers.
             </p>
-            <div className="flex items-center gap-2">
+
+            <div className="flex items-center gap-4">
               {[Facebook, Twitter, Instagram, Youtube].map((Icon, i) => (
                 <a key={i} href="#"
-                  className="w-9 h-9 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-violet-500 transition-colors group">
-                  <Icon className="h-4 w-4 text-gray-500 group-hover:text-white transition-colors" />
+                  className="w-12 h-12 bg-gray-50 border border-gray-100 rounded-2xl flex items-center justify-center hover:bg-primary hover:border-primary hover:text-white transition-all duration-300 group">
+                  <Icon className="h-5 w-5 text-gray-400 group-hover:text-white group-hover:scale-110 transition-all" />
                 </a>
               ))}
             </div>
           </div>
 
-          {/* Links */}
-          {Object.entries(links).map(([title, items]) => (
-            <div key={title}>
-              <p className="text-white text-sm font-bold mb-4">{title}</p>
-              <ul className="space-y-2.5">
-                {items.map((item) => (
-                  <li key={item.label}>
-                    <Link href={item.href}
-                      className="text-sm text-gray-500 hover:text-violet-500 transition-colors">
-                      {item.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          {/* Links Grid */}
+          <div className="xl:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-12">
+            {Object.entries(links).map(([title, items]) => (
+              <div key={title}>
+                <h4 className="text-sm font-black text-gray-900 uppercase tracking-[0.2em] mb-8">{title}</h4>
+                <ul className="space-y-4">
+                  {items.map((item) => (
+                    <li key={item.label}>
+                      <Link href={item.href}
+                        className="text-sm text-gray-500 hover:text-primary transition-colors flex items-center group">
+                        <span className="h-px w-0 bg-primary mr-0 group-hover:w-3 group-hover:mr-2 transition-all duration-300" />
+                        {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="border-t border-gray-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-gray-600">© {new Date().getFullYear()} ShopHub. All rights reserved.</p>
-          <div className="flex items-center gap-4 text-xs text-gray-600">
-            <span>Secure payments</span>
-            <span>·</span>
-            <span>Free returns</span>
-            <span>·</span>
-            <span>Buyer protection</span>
+        {/* Footer Bottom */}
+        <div className="pt-10 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="flex items-center gap-8">
+            <p className="text-xs text-gray-400 font-medium tracking-wide">
+              © {new Date().getFullYear()} ShopHub Global. All signatures reserved.
+            </p>
+            <div className="hidden lg:flex items-center gap-6">
+              {['Security', 'Status', 'API', 'Legal'].map(item => (
+                <Link key={item} href="#" className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors">{item}</Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-10">
+            <Link href="/products" className="group flex items-center gap-3 text-xs font-black text-gray-900 uppercase tracking-widest">
+              Explore Now <ArrowRight className="h-4 w-4 text-primary group-hover:translate-x-2 transition-transform" />
+            </Link>
           </div>
         </div>
       </div>

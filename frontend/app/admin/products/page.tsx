@@ -32,9 +32,9 @@ export default function AdminProductsPage() {
   const fetchProducts = async (p = page, q = search) => {
     setLoading(true)
     try {
-      const params: any = { page: p, limit: 20 }
+      const params: any = { offset: (p - 1) * 20, limit: 20 }
       if (q) params.search = q
-      const { data } = await api.get('/products', { params })
+      const { data } = await api.get('/admin/products', { params })
       setProducts(data.data?.products || [])
       setTotal(data.data?.total || 0)
     } catch { setProducts([]) }
@@ -71,11 +71,11 @@ export default function AdminProductsPage() {
     form.setFieldsValue({
       name: record.name,
       description: record.description,
-      base_price: record.price || record.base_price,
-      category_id: record.category_id,
+      basePrice: record.basePrice,
+      categoryId: record.categoryId,
       brand: record.brand,
       status: record.status,
-      stock_quantity: record.stock_quantity,
+      stockQuantity: record.stockQuantity,
     })
     setModalOpen(true)
   }
@@ -148,11 +148,11 @@ export default function AdminProductsPage() {
       },
     },
     { title: 'Name', dataIndex: 'name', key: 'name', render: (n: string) => <Typography.Text strong>{n}</Typography.Text> },
-    { title: 'Category', dataIndex: 'category_name', key: 'category_name', render: (c: string) => c ? <Tag>{c}</Tag> : '—' },
-    { title: 'Price', dataIndex: 'price', key: 'price', render: (v: number) => `$${Number(v || 0).toFixed(2)}` },
-    { title: 'Stock', dataIndex: 'stock_quantity', key: 'stock_quantity', render: (v: number) => <Tag color={v > 10 ? 'green' : v > 0 ? 'orange' : 'red'}>{v ?? 0}</Tag> },
+    { title: 'Category', dataIndex: 'categoryName', key: 'categoryName', render: (c: string) => c ? <Tag>{c}</Tag> : '—' },
+    { title: 'Price', dataIndex: 'basePrice', key: 'basePrice', render: (v: number) => `$${Number(v || 0).toFixed(2)}` },
+    { title: 'Stock', dataIndex: 'stockQuantity', key: 'stockQuantity', render: (v: number) => <Tag color={v > 10 ? 'green' : v > 0 ? 'orange' : 'red'}>{v ?? 0}</Tag> },
     { title: 'Status', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === 'published' ? 'green' : s === 'draft' ? 'default' : 'red'}>{s}</Tag> },
-    { title: 'Rating', dataIndex: 'average_rating', key: 'average_rating', render: (v: number) => v ? `${Number(v).toFixed(1)} ★` : '—' },
+    { title: 'Rating', dataIndex: 'averageRating', key: 'averageRating', render: (v: number) => v ? `${Number(v).toFixed(1)} ★` : '—' },
     {
       title: 'Actions', key: 'actions',
       render: (_: any, record: any) => (
@@ -224,15 +224,15 @@ export default function AdminProductsPage() {
             <Input.TextArea rows={3} placeholder="Product description..." />
           </Form.Item>
           <Space style={{ width: '100%' }} size={16}>
-            <Form.Item name="base_price" label="Price ($)" rules={[{ required: true }]} style={{ flex: 1 }}>
+            <Form.Item name="basePrice" label="Price ($)" rules={[{ required: true }]} style={{ flex: 1 }}>
               <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="0.00" />
             </Form.Item>
-            <Form.Item name="stock_quantity" label="Stock Qty" style={{ flex: 1 }}>
+            <Form.Item name="stockQuantity" label="Stock Qty" style={{ flex: 1 }}>
               <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
             </Form.Item>
           </Space>
           <Space style={{ width: '100%' }} size={16}>
-            <Form.Item name="category_id" label="Category" rules={[{ required: true }]} style={{ flex: 1 }}>
+            <Form.Item name="categoryId" label="Category" rules={[{ required: true }]} style={{ flex: 1 }}>
               <Select placeholder="Select category">
                 {categories.map((c: any) => (
                   <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>

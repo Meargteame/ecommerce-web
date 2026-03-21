@@ -19,8 +19,14 @@ api.interceptors.response.use(
   (error) => {
     if (typeof window !== 'undefined') {
       if (error.response?.status === 401) {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
+        // Prevent infinite loop if the logout request itself returns 401
+        if (error.config?.url?.includes('/auth/logout')) {
+          return Promise.reject(error)
+        }
+        // Use standard logout from AuthStore to clear state AND storage
+        import('@/store/authStore').then((mod) => {
+          mod.useAuthStore.getState().logout()
+        })
       }
       // 403 — let the calling component handle it, don't crash the app
     }

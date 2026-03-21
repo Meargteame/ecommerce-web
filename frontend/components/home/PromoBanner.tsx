@@ -34,7 +34,7 @@ const banners = [
 
 export default function PromoBanner() {
   return (
-    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <section className="max-w-[1920px] mx-auto px-6 lg:px-12 py-12">
       <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-6 h-[700px] md:h-[600px]">
         {banners.map((b) => (
           <Link key={b.title} href={b.href}

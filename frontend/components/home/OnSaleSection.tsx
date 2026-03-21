@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ShoppingCart, Star, ArrowRight, Clock } from 'lucide-react'
 
 const saleProducts = [
@@ -17,14 +18,7 @@ const saleProducts = [
     badgeColor: 'bg-blue-100 text-blue-700',
     bg: 'bg-blue-50',
     href: '/products?category=electronics',
-    icon: (
-      <svg viewBox="0 0 80 80" fill="none" className="w-20 h-20 text-blue-300">
-        <rect x="8" y="16" width="64" height="40" rx="4" stroke="currentColor" strokeWidth="3" />
-        <path d="M24 56l-4 8h40l-4-8" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
-        <rect x="16" y="24" width="48" height="24" rx="2" fill="currentColor" opacity="0.15" />
-        <circle cx="40" cy="36" r="8" stroke="currentColor" strokeWidth="2.5" />
-      </svg>
-    ),
+    image: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=600&q=80',
   },
   {
     name: 'Designer Winter Coat — Premium Wool',
@@ -38,12 +32,7 @@ const saleProducts = [
     badgeColor: 'bg-pink-100 text-pink-700',
     bg: 'bg-pink-50',
     href: '/products?category=fashion',
-    icon: (
-      <svg viewBox="0 0 80 80" fill="none" className="w-20 h-20 text-pink-300">
-        <path d="M28 12l-16 12v8h12v36h32V32h12v-8L52 12" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
-        <path d="M28 12c0 6.627 5.373 12 12 12s12-5.373 12-12" stroke="currentColor" strokeWidth="3" />
-      </svg>
-    ),
+    image: 'https://images.unsplash.com/photo-1539533113208-f6df8cc8b543?w=600&q=80',
   },
   {
     name: 'Robot Vacuum with Smart Mapping',
@@ -57,14 +46,7 @@ const saleProducts = [
     badgeColor: 'bg-green-100 text-green-700',
     bg: 'bg-green-50',
     href: '/products?category=home-living',
-    icon: (
-      <svg viewBox="0 0 80 80" fill="none" className="w-20 h-20 text-green-300">
-        <circle cx="40" cy="44" r="24" stroke="currentColor" strokeWidth="3" />
-        <circle cx="40" cy="44" r="12" stroke="currentColor" strokeWidth="2.5" />
-        <circle cx="40" cy="44" r="4" fill="currentColor" opacity="0.4" />
-        <path d="M40 20v-8M56 28l6-6M60 44h8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      </svg>
-    ),
+    image: 'https://images.unsplash.com/photo-1518133835878-5a93cc3f89e5?w=600&q=80',
   },
   {
     name: 'Professional Camera Kit + Lenses',
@@ -78,15 +60,7 @@ const saleProducts = [
     badgeColor: 'bg-gray-100 text-gray-700',
     bg: 'bg-gray-50',
     href: '/products?category=electronics',
-    icon: (
-      <svg viewBox="0 0 80 80" fill="none" className="w-20 h-20 text-gray-400">
-        <rect x="8" y="24" width="64" height="40" rx="4" stroke="currentColor" strokeWidth="3" />
-        <path d="M28 24l4-10h16l4 10" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
-        <circle cx="40" cy="44" r="12" stroke="currentColor" strokeWidth="3" />
-        <circle cx="40" cy="44" r="5" fill="currentColor" opacity="0.3" />
-        <circle cx="60" cy="32" r="3" fill="currentColor" opacity="0.4" />
-      </svg>
-    ),
+    image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=600&q=80',
   },
   {
     name: 'Luxury Bedding Set — Egyptian Cotton',
@@ -100,14 +74,7 @@ const saleProducts = [
     badgeColor: 'bg-amber-100 text-amber-700',
     bg: 'bg-amber-50',
     href: '/products?category=home-living',
-    icon: (
-      <svg viewBox="0 0 80 80" fill="none" className="w-20 h-20 text-amber-300">
-        <rect x="8" y="36" width="64" height="28" rx="4" stroke="currentColor" strokeWidth="3" />
-        <path d="M8 44h64" stroke="currentColor" strokeWidth="2.5" />
-        <rect x="16" y="20" width="20" height="16" rx="8" stroke="currentColor" strokeWidth="3" />
-        <rect x="44" y="20" width="20" height="16" rx="8" stroke="currentColor" strokeWidth="3" />
-      </svg>
-    ),
+    image: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=600&q=80',
   },
   {
     name: 'Mountain Bike — 21 Speed Aluminum',
@@ -121,15 +88,7 @@ const saleProducts = [
     badgeColor: 'bg-purple-50 text-[#7C3AED]',
     bg: 'bg-gray-50',
     href: '/products?category=sports',
-    icon: (
-      <svg viewBox="0 0 80 80" fill="none" className="w-20 h-20 text-gray-400">
-        <circle cx="20" cy="52" r="14" stroke="currentColor" strokeWidth="3" />
-        <circle cx="60" cy="52" r="14" stroke="currentColor" strokeWidth="3" />
-        <path d="M20 52l16-24h8l8 24" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
-        <path d="M44 28l8 24" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-        <path d="M36 20h12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      </svg>
-    ),
+    image: 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=600&q=80',
   },
 ]
 
@@ -193,7 +152,7 @@ export default function OnSaleSection() {
       <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-red-500/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2" />
       <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-primary/5 blur-[100px] rounded-full translate-y-1/2 -translate-x-1/2" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div className="max-w-[1920px] mx-auto px-6 lg:px-12 relative z-10">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 mb-12">
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -235,8 +194,8 @@ export default function OnSaleSection() {
               className="group bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden hover:shadow-2xl hover:shadow-gray-200/50 transition-all duration-500 flex flex-col hover:-translate-y-2"
             >
               <div className={`relative aspect-[4/3] ${product.bg} flex items-center justify-center overflow-hidden`}>
-                <div className="group-hover:scale-110 transition-transform duration-700 ease-out">
-                  {product.icon}
+                <div className="relative w-full h-full group-hover:scale-110 transition-transform duration-700 ease-out">
+                  <Image src={product.image} alt={product.name} fill sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" className="object-cover" />
                 </div>
                 
                 <div className="absolute top-6 left-6 bg-red-600 text-white text-[11px] font-black px-3 py-1.5 rounded-xl shadow-lg shadow-red-200 uppercase tracking-tighter">

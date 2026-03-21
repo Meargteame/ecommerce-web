@@ -7,7 +7,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useAuthModalStore } from '@/store/authModalStore'
 import {
   LayoutDashboard, Package, ShoppingBag, Settings, Store,
-  ArrowLeft, BarChart2, Warehouse, DollarSign, Star,
+  ArrowLeft, BarChart2, Warehouse, DollarSign, Star, MessageSquare, Truck,
 } from 'lucide-react'
 
 const navItems = [
@@ -18,6 +18,8 @@ const navItems = [
   { href: '/seller/earnings', label: 'Earnings', icon: DollarSign },
   { href: '/seller/analytics', label: 'Analytics', icon: BarChart2 },
   { href: '/seller/reviews', label: 'Reviews', icon: Star },
+  { href: '/seller/messages', label: 'Messages', icon: MessageSquare },
+  { href: '/seller/shipping', label: 'Shipping', icon: Truck },
   { href: '/seller/settings', label: 'Settings', icon: Settings },
 ]
 

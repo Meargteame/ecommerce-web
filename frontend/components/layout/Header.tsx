@@ -184,61 +184,61 @@ export default function Header() {
       }`}>
 
         {/* ── TOP BAR ── */}
-        <div className="">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center h-14 gap-4 lg:gap-8">
+        <div className="w-full border-b border-gray-100/80">
+          <div className="w-full mx-auto px-6 lg:px-12">
+            <div className="flex items-center h-20 gap-10 xl:gap-20">
 
               {/* Logo */}
-              <Link href="/" className="flex items-center gap-2 group shrink-0">
-                <div className="w-9 h-9 premium-gradient rounded-xl flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-110 transition-all duration-300">
-                  <ShoppingBag className="text-white h-5 w-5" />
+              <Link href="/" className="flex items-center gap-4 group shrink-0 transition-transform hover:scale-[1.02]">
+                <div className="w-12 h-12 premium-gradient rounded-2xl flex items-center justify-center shadow-2xl shadow-primary/20 group-hover:shadow-primary/40 transition-all duration-500">
+                  <ShoppingBag className="text-white h-7 w-7" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-bold text-gray-900 text-xl tracking-tight leading-none">ShopHub</span>
-                  <span className="text-[10px] text-primary/70 font-bold uppercase tracking-[0.2em] leading-none mt-1">Premium Store</span>
+                  <span className="font-black text-gray-900 text-3xl tracking-tighter leading-none">ShopHub</span>
+                  <span className="text-[10px] text-primary/70 font-black uppercase tracking-[0.4em] leading-none mt-2 transition-colors group-hover:text-primary">Premium Store</span>
                 </div>
               </Link>
 
-              {/* Deliver to — noon has this between logo and search */}
-              <button className="hidden lg:flex items-center gap-1.5 shrink-0 text-left group">
-                <MapPin className="h-4 w-4 text-[#6B7280] shrink-0" />
+              {/* Deliver to */}
+              <button className="hidden xl:flex items-center gap-4 shrink-0 text-left group px-6 py-3 bg-gray-50/50 hover:bg-gray-50 rounded-[1.5rem] border border-transparent hover:border-gray-200 transition-all duration-300">
+                <MapPin className="h-6 w-6 text-gray-400 group-hover:text-primary transition-colors shrink-0" />
                 <div className="leading-tight">
-                  <p className="text-[10px] text-[#6B7280]">Deliver to</p>
-                  <p className="text-xs font-semibold text-[#111111] flex items-center gap-0.5">
-                    Worldwide <ChevronDown className="h-3 w-3 text-[#6B7280]" />
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deliver to</p>
+                  <p className="text-sm font-black text-gray-900 flex items-center gap-2">
+                    Worldwide <ChevronDown className="h-4 w-4 text-primary group-hover:translate-y-0.5 transition-transform" />
                   </p>
                 </div>
               </button>
 
               {/* Search */}
-              <form onSubmit={handleSearch} className="flex-1 max-w-2xl">
-                <div className="group flex items-center h-11 bg-gray-100 border-none rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:bg-white transition-all">
+              <form onSubmit={handleSearch} className="flex-1 max-w-5xl mx-2">
+                <div className="group flex items-center h-14 bg-gray-50 border border-gray-100 rounded-[1.75rem] overflow-hidden focus-within:ring-4 focus-within:ring-primary/10 focus-within:bg-white focus-within:border-primary/20 transition-all duration-500 shadow-sm shadow-black/[0.02]">
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search for products, brands and more"
-                    className="flex-1 h-full px-5 bg-transparent text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                    placeholder="Search for physical or digital products, brands and more..."
+                    className="flex-1 h-full px-8 bg-transparent text-sm font-bold text-gray-900 placeholder-gray-400 focus:outline-none"
                   />
                   <button
                     type="submit"
-                    className="h-full px-6 text-gray-400 hover:text-primary transition-colors shrink-0 flex items-center justify-center"
+                    className="h-full px-10 text-gray-400 hover:text-primary transition-colors shrink-0 flex items-center justify-center bg-gray-100/50 group-hover:bg-gray-100 border-l border-gray-200/50"
                   >
-                    <Search className="h-5 w-5" />
+                    <Search className="h-6 w-6 transition-transform group-hover:scale-110" />
                   </button>
                 </div>
               </form>
 
-              {/* Right actions — compact, icon + label style like noon */}
-              <div className="flex items-center gap-0.5 shrink-0">
+              {/* Right actions */}
+              <div className="flex items-center gap-3 xl:gap-5 shrink-0">
 
                 {/* Notifications (logged in only) */}
                 {user && (
                   <Link href="/notifications"
-                    className="relative hidden sm:flex flex-col items-center justify-center w-10 h-10 text-[#6B7280] hover:text-[#111111] rounded transition-colors">
-                    <Bell className="h-5 w-5" />
+                    className="relative hidden sm:flex flex-col items-center justify-center w-12 h-12 text-gray-400 hover:text-primary hover:bg-gray-50 rounded-2xl transition-all duration-300">
+                    <Bell className="h-6 w-6" />
                     {unreadNotifs > 0 && (
-                      <span className="absolute top-1 right-1 min-w-[15px] h-[15px] bg-[#7C3AED] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                      <span className="absolute top-2 right-2 min-w-[20px] h-[20px] bg-primary text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg shadow-primary/30 border-2 border-white">
                         {unreadNotifs > 9 ? '9+' : unreadNotifs}
                       </span>
                     )}
@@ -247,18 +247,18 @@ export default function Header() {
 
                 {/* Wishlist */}
                 <Link href="/wishlist"
-                  className="hidden sm:flex items-center justify-center w-10 h-10 text-[#6B7280] hover:text-[#111111] rounded transition-colors">
-                  <Heart className="h-5 w-5" />
+                  className="hidden sm:flex items-center justify-center w-12 h-12 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all duration-300">
+                  <Heart className="h-6 w-6 shadow-sm" />
                 </Link>
 
                 {/* Cart */}
                 <button
                   onClick={() => setCartOpen(true)}
-                  className="relative flex items-center justify-center w-10 h-10 text-[#6B7280] hover:text-[#111111] rounded transition-colors mr-1"
+                  className="relative flex items-center justify-center w-12 h-12 text-gray-400 hover:text-primary hover:bg-gray-50 rounded-2xl transition-all duration-300 mr-2"
                 >
-                  <ShoppingCart className="h-5 w-5" />
+                  <ShoppingCart className="h-6 w-6" />
                   {cartCount > 0 && (
-                    <span className="absolute top-1 right-1 min-w-[15px] h-[15px] bg-[#7C3AED] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                    <span className="absolute top-2 right-2 min-w-[20px] h-[20px] bg-primary text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg shadow-primary/30 border-2 border-white animate-in zoom-in duration-300">
                       {cartCount > 99 ? '99+' : cartCount}
                     </span>
                   )}
@@ -269,21 +269,37 @@ export default function Header() {
                   <div className="relative" ref={menuRef}>
                     <button
                       onClick={() => setUserMenuOpen(!userMenuOpen)}
-                      className="hidden sm:flex flex-col items-center justify-center gap-0.5 px-2 h-10 text-[#6B7280] hover:text-[#111111] rounded transition-colors"
+                      className="hidden sm:flex items-center gap-3 px-4 h-12 bg-gray-50/50 hover:bg-gray-100 rounded-2xl border border-transparent hover:border-gray-200 transition-all duration-300"
                     >
-                      <div className="w-6 h-6 rounded-full bg-[#111111] flex items-center justify-center text-white font-semibold text-[10px] shrink-0">
+                      <div className="w-8 h-8 rounded-xl premium-gradient flex items-center justify-center text-white font-black text-xs shadow-lg shadow-primary/20">
                         {user.first_name[0]}{user.last_name[0]}
                       </div>
-                      <span className="text-[10px] font-medium leading-none hidden lg:block">{user.first_name}</span>
+                      <div className="flex flex-col text-left leading-none">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Account</span>
+                        <span className="text-sm font-black text-gray-900">{user.first_name}</span>
+                      </div>
+                      <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-300 ${userMenuOpen ? 'rotate-180' : ''}`} />
                     </button>
 
                     {userMenuOpen && (
-                      <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-[#E5E7EB] rounded-lg shadow-xl py-1 z-50 overflow-hidden text-left">
-                        <div className="px-4 py-3 bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                          <p className="text-sm font-semibold text-[#111111] whitespace-nowrap overflow-hidden text-ellipsis">{user.first_name} {user.last_name}</p>
-                          <p className="text-xs text-[#6B7280] truncate">{user.email}</p>
+                      <div className="absolute right-0 top-full mt-3 w-64 bg-white border border-gray-100 rounded-3xl shadow-2xl py-2 z-50 overflow-hidden text-left animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="px-6 py-5 bg-gray-50/50 border-b border-gray-100">
+                          <p className="text-sm font-black text-gray-900 mb-0.5">{user.first_name} {user.last_name}</p>
+                          <p className="text-xs font-medium text-gray-400 truncate">{user.email}</p>
                         </div>
-                        <div className="py-1">
+                        <div className="py-2">
+                          {user.role === 'admin' && (
+                            <Link href="/admin" onClick={() => setUserMenuOpen(false)}
+                              className="flex items-center px-6 py-3 text-sm font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all border-b border-gray-100">
+                              Admin Dashboard
+                            </Link>
+                          )}
+                          {user.role === 'seller' && (
+                            <Link href="/seller" onClick={() => setUserMenuOpen(false)}
+                              className="flex items-center px-6 py-3 text-sm font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all border-b border-gray-100">
+                              Seller Hub
+                            </Link>
+                          )}
                           {[
                             { href: '/account/profile', label: 'My Profile' },
                             { href: '/account/orders', label: 'My Orders' },
@@ -291,35 +307,15 @@ export default function Header() {
                             { href: '/account/addresses', label: 'Saved Addresses' },
                           ].map((item) => (
                             <Link key={item.label} href={item.href} onClick={() => setUserMenuOpen(false)}
-                                  className="block px-4 py-2.5 text-sm text-[#4B5563] font-medium hover:text-[#111111] hover:bg-[#F3F4F6] transition-colors">
+                                  className="flex items-center px-6 py-3 text-sm font-bold text-gray-500 hover:text-primary hover:bg-primary/5 transition-all">
                               {item.label}
                             </Link>
                           ))}
                         </div>
-                        <div className="border-t border-[#E5E7EB] py-1">
-                          {user.role === 'customer' && (
-                            <Link href="/sell" onClick={() => setUserMenuOpen(false)}
-                                  className="block px-4 py-2.5 text-sm text-[#4B5563] font-medium hover:text-[#111111] hover:bg-[#F3F4F6] transition-colors">
-                              Start Selling
-                            </Link>
-                          )}
-                          {user.role === 'seller' && (
-                            <Link href="/seller" onClick={() => setUserMenuOpen(false)}
-                                  className="block px-4 py-2.5 text-sm text-[#7C3AED] font-bold hover:bg-[#F3F4F6] transition-colors">
-                              Seller Dashboard
-                            </Link>
-                          )}
-                          {user.role === 'admin' && (
-                            <Link href="/admin" onClick={() => setUserMenuOpen(false)}
-                                  className="block px-4 py-2.5 text-sm text-[#ef4444] font-bold hover:bg-[#F3F4F6] transition-colors">
-                              Admin Panel
-                            </Link>
-                          )}
-                        </div>
-                        <div className="border-t border-[#E5E7EB] py-1 bg-gray-50">
+                        <div className="border-t border-gray-100 py-2 bg-gray-50/30">
                           <button
                             onClick={() => { setUserMenuOpen(false); setSignOutModalOpen(true) }}
-                            className="block w-full text-left px-4 py-2.5 text-sm text-red-600 font-medium hover:bg-red-50 hover:text-red-700 transition-colors"
+                            className="flex items-center w-full px-6 py-3 text-sm font-black text-red-600 hover:bg-red-50 transition-all"
                           >
                             Sign Out
                           </button>
@@ -328,13 +324,12 @@ export default function Header() {
                     )}
                   </div>
                 ) : (
-                  /* Log In button — noon style: icon + text */
                   <button
                     onClick={() => openModal('login')}
-                    className="hidden sm:flex items-center gap-1.5 px-3 h-10 text-sm font-medium text-[#111111] hover:bg-[#F3F4F6] rounded transition-colors border border-[#E5E7EB]"
+                    className="hidden sm:flex items-center gap-3 px-6 h-12 bg-primary hover:bg-primary-hover text-white rounded-2xl shadow-xl shadow-primary/20 transition-all duration-300 group"
                   >
-                    <User className="h-4 w-4 text-[#6B7280]" />
-                    Log In
+                    <User className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                    <span className="text-sm font-black">Log In</span>
                   </button>
                 )}
 
@@ -357,7 +352,7 @@ export default function Header() {
           }`}
           onMouseLeave={() => setActiveCategoryMenu(null)}
         >
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="w-full mx-auto px-6 lg:px-12">
             <div className="flex items-center gap-1 -ml-3">
               {categories.map((cat) => (
                 <Link

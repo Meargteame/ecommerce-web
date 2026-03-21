@@ -96,6 +96,16 @@ router.post('/low-stock-alert', authenticate, authorize('admin'), async (req: Re
   }
 })
 
+// GET /api/notifications - Get user notifications (returning empty for now)
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    // Return empty list to stop 404s until full notification system is wired up
+    res.json({ data: { notifications: [] } })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch notifications' })
+  }
+})
+
 // ============================================
 // Notification Preferences API
 // ============================================

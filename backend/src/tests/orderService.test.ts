@@ -54,8 +54,8 @@ describe('OrderService', () => {
 
   describe('listOrders', () => {
     it('returns orders with total', async () => {
-      mockPool.query
-        .mockResolvedValueOnce({ rows: [{ total: '2' }], rowCount: 1 } as any)
+      ;(mockPool.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{ total: '2' }], rowCount: 1 })
         .mockResolvedValueOnce({
           rows: [
             { id: 'o1', order_number: 'ORD-001', user_id: 'u1', status: 'placed',
@@ -65,7 +65,7 @@ describe('OrderService', () => {
               created_at: new Date(), updated_at: new Date() },
           ],
           rowCount: 1,
-        } as any)
+        })
 
       const result = await orderService.listOrders({ userId: 'u1' })
       expect(result.total).toBe(2)

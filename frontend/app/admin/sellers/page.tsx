@@ -50,18 +50,18 @@ export default function AdminSellersPage() {
       title: 'Seller', key: 'seller',
       render: (_: any, r: any) => (
         <Space>
-          <Avatar size={36} style={{ background: '#7c3aed' }} icon={<ShopOutlined />}>{r.first_name?.[0]}</Avatar>
+          <Avatar size={36} style={{ background: '#7c3aed' }} icon={<ShopOutlined />}>{r.firstName?.[0]}</Avatar>
           <div>
-            <Text strong style={{ display: 'block', fontSize: 13 }}>{r.store_name || `${r.first_name} ${r.last_name}`}</Text>
+            <Text strong style={{ display: 'block', fontSize: 13 }}>{r.storeName || `${r.firstName} ${r.lastName}`}</Text>
             <Text type="secondary" style={{ fontSize: 12 }}>{r.email}</Text>
           </div>
         </Space>
       )
     },
-    { title: 'Products', dataIndex: 'product_count', key: 'product_count', render: (v: number) => v ?? 0 },
-    { title: 'Revenue', dataIndex: 'total_revenue', key: 'total_revenue', render: (v: number) => '$' + Number(v || 0).toFixed(2) },
+    { title: 'Products', dataIndex: 'productCount', key: 'productCount', render: (v: number) => v ?? 0 },
+    { title: 'Revenue', dataIndex: 'totalRevenue', key: 'totalRevenue', render: (v: number) => '$' + Number(v || 0).toFixed(2) },
     {
-      title: 'Verified', dataIndex: 'is_verified', key: 'is_verified',
+      title: 'Verified', dataIndex: 'isVerified', key: 'isVerified',
       render: (v: boolean, r: any) => (
         <Tooltip title={v ? 'Click to unverify' : 'Click to verify'}>
           <Tag
@@ -76,18 +76,18 @@ export default function AdminSellersPage() {
       )
     },
     {
-      title: 'Status', dataIndex: 'account_status', key: 'account_status',
+      title: 'Status', dataIndex: 'accountStatus', key: 'accountStatus',
       render: (s: string) => <Tag color={s === 'active' || !s ? 'green' : 'red'}>{s || 'active'}</Tag>
     },
-    { title: 'Joined', dataIndex: 'created_at', key: 'created_at', render: (d: string) => d ? new Date(d).toLocaleDateString() : '—' },
+    { title: 'Joined', dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => d ? new Date(d).toLocaleDateString() : '—' },
     {
       title: 'Actions', key: 'actions',
       render: (_: any, r: any) => {
-        const isActive = !r.account_status || r.account_status === 'active'
+        const isActive = !r.accountStatus || r.accountStatus === 'active'
         return (
           <Popconfirm
             title={isActive ? 'Suspend this seller?' : 'Reactivate this seller?'}
-            onConfirm={() => toggleStatus(r.id, r.account_status || 'active')}
+            onConfirm={() => toggleStatus(r.id, r.accountStatus || 'active')}
           >
             <Button size="small" danger={isActive} type={isActive ? 'default' : 'primary'}
               icon={isActive ? <StopOutlined /> : <CheckCircleOutlined />}>

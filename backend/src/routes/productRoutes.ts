@@ -269,4 +269,59 @@ router.delete(
   }
 )
 
+/**
+ * @route   POST /api/products/:id/images
+ * @desc    Add image to product
+ * @access  Private (seller or admin)
+ */
+router.post(
+  '/:id/images',
+  authenticate,
+  authorize('seller', 'admin', 'manager'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params
+      const { url, altText, displayOrder, isPrimary } = req.body
+      if (!url) {
+        res.status(400).json({ error: 'Image URL is required' })
+        return
+      }
+
+      // Verify product exists
+      const product = await productService.getProduct(id)
+      if (!product) {
+        res.status(404).json({ error: 'Product not found' })
+        return
+      }
+
+      const pool = (await import('../config/database')).default
+      
+      // If setting as primary, unset existing primary
+      if (isPrimary) {
+        await pool.query(
+          'UPDATE product_images SET is_primary = false WHERE product_id = $1',
+          [id]
+        )
+      }
+
+      const result = await pool.query(
+        `INSERT INTO product_images (product_id, url, alt_text, display_order, is_primary)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [id, url, altText || null, displayOrder || 0, isPrimary || false]
+      )
+
+      res.status(201).json({
+        message: 'Image added successfully',
+        data: result.rows[0],
+      })
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(400).json({ error: error.message })
+        return
+      }
+      res.status(500).json({ error: 'Failed to add image' })
+    }
+  }
+)
+
 export default router

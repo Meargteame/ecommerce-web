@@ -68,6 +68,7 @@ import cartRoutes from './routes/cartRoutes'
 import inventoryRoutes from './routes/inventoryRoutes'
 import orderRoutes from './routes/orderRoutes'
 import paymentRoutes from './routes/paymentRoutes'
+import paymentMethodRoutes from './routes/paymentMethodRoutes'
 import shippingRoutes from './routes/shippingRoutes'
 import reviewRoutes from './routes/reviewRoutes'
 import notificationRoutes from './routes/notificationRoutes'
@@ -97,6 +98,7 @@ app.use('/api/cart', cartRoutes)
 app.use('/api/inventory', inventoryRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/payments', paymentRoutes)
+app.use('/api/payment-methods', paymentMethodRoutes)
 app.use('/api/shipping', shippingRoutes)
 app.use('/api/reviews', reviewRoutes)
 app.use('/api/notifications', notificationRoutes)

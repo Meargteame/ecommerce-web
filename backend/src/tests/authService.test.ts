@@ -23,8 +23,8 @@ describe('AuthService', () => {
 
   describe('register', () => {
     it('throws if email already exists', async () => {
-      mockPool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'existing-id' }], rowCount: 1 } as any)
+      ;(mockPool.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{ id: 'existing-id' }], rowCount: 1 })
 
       await expect(
         authService.register({ email: 'test@example.com', password: 'Password1!' })
@@ -32,8 +32,8 @@ describe('AuthService', () => {
     })
 
     it('creates a new user and returns tokens', async () => {
-      mockPool.query
-        .mockResolvedValueOnce({ rows: [], rowCount: 0 } as any) // no existing user
+      ;(mockPool.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // no existing user
         .mockResolvedValueOnce({
           rows: [{
             id: 'new-user-id', email: 'test@example.com',
@@ -42,7 +42,7 @@ describe('AuthService', () => {
             role: 'customer', created_at: new Date(), updated_at: new Date(),
           }],
           rowCount: 1,
-        } as any)
+        })
 
       const result = await authService.register({
         email: 'test@example.com',
@@ -60,13 +60,13 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('throws on invalid email', async () => {
-      mockPool.query.mockResolvedValueOnce({ rows: [], rowCount: 0 } as any)
+      ;(mockPool.query as jest.Mock).mockResolvedValueOnce({ rows: [], rowCount: 0 })
       await expect(authService.login('bad@example.com', 'pass')).rejects.toThrow('Invalid email or password')
     })
 
     it('throws on locked account', async () => {
       const lockedUntil = new Date(Date.now() + 60000)
-      mockPool.query.mockResolvedValueOnce({
+      ;(mockPool.query as jest.Mock).mockResolvedValueOnce({
         rows: [{
           id: 'u1', email: 'test@example.com', password_hash: 'hash',
           first_name: null, last_name: null, phone: null,
@@ -75,14 +75,14 @@ describe('AuthService', () => {
           locked_until: lockedUntil, created_at: new Date(), updated_at: new Date(),
         }],
         rowCount: 1,
-      } as any)
+      })
 
       await expect(authService.login('test@example.com', 'pass')).rejects.toThrow('locked')
     })
 
     it('returns tokens on valid credentials', async () => {
       const hash = await bcrypt.hash('Password1!', 10)
-      mockPool.query
+      ;(mockPool.query as jest.Mock)
         .mockResolvedValueOnce({
           rows: [{
             id: 'u1', email: 'test@example.com', password_hash: hash,
@@ -92,8 +92,8 @@ describe('AuthService', () => {
             locked_until: null, created_at: new Date(), updated_at: new Date(),
           }],
           rowCount: 1,
-        } as any)
-        .mockResolvedValueOnce({ rows: [], rowCount: 1 } as any) // reset attempts
+        })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 }) // reset attempts
 
       const result = await authService.login('test@example.com', 'Password1!')
       expect(result.accessToken).toBe('mock-access-token')
@@ -103,14 +103,14 @@ describe('AuthService', () => {
 
   describe('verifyEmail', () => {
     it('throws on invalid token', async () => {
-      mockPool.query.mockResolvedValueOnce({ rows: [], rowCount: 0 } as any)
+      ;(mockPool.query as jest.Mock).mockResolvedValueOnce({ rows: [], rowCount: 0 })
       await expect(authService.verifyEmail('bad-token')).rejects.toThrow('Invalid or expired')
     })
 
     it('marks email as verified', async () => {
-      mockPool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'u1' }], rowCount: 1 } as any)
-        .mockResolvedValueOnce({ rows: [], rowCount: 1 } as any)
+      ;(mockPool.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{ id: 'u1' }], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
 
       await expect(authService.verifyEmail('valid-token')).resolves.toBeUndefined()
     })

@@ -10,21 +10,26 @@ import { Search, Package, Truck, CheckCircle, Clock, XCircle, MapPin } from 'luc
 interface OrderTracking {
   id: string
   status: string
-  total_amount: number
-  created_at: string
-  shipping_address?: { full_name?: string; address_line1?: string; city?: string; state?: string; country?: string }
-  items?: { name: string; quantity: number; price: number }[]
+  total_amount?: number
+  totalAmount?: number
+  created_at?: string
+  createdAt?: string
+  shipping_address?: any
+  shippingAddress?: any
+  items?: { name?: string; productName?: string; quantity: number; price?: number; unitPrice?: number }[]
   tracking_number?: string
+  trackingNumber?: string
   carrier?: string
 }
 
 const steps = [
-  { key: 'pending', label: 'Order Placed', icon: <Clock className="h-5 w-5" /> },
+  { key: 'placed', label: 'Order Placed', icon: <Clock className="h-5 w-5" /> },
+  { key: 'payment_confirmed', label: 'Payment Confirmed', icon: <CheckCircle className="h-5 w-5" /> },
   { key: 'processing', label: 'Processing', icon: <Package className="h-5 w-5" /> },
   { key: 'shipped', label: 'Shipped', icon: <Truck className="h-5 w-5" /> },
   { key: 'delivered', label: 'Delivered', icon: <CheckCircle className="h-5 w-5" /> },
 ]
-const stepIndex: Record<string, number> = { pending: 0, processing: 1, shipped: 2, delivered: 3 }
+const stepIndex: Record<string, number> = { placed: 0, pending: 0, payment_confirmed: 1, processing: 2, shipped: 3, delivered: 4 }
 
 export default function TrackOrderPage() {
   const [orderId, setOrderId] = useState('')
@@ -84,11 +89,11 @@ export default function TrackOrderPage() {
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Order ID</p>
                   <p className="font-mono font-bold text-gray-900">{order.id}</p>
-                  <p className="text-xs font-medium text-gray-500 mt-1">Placed {new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                  <p className="text-xs font-medium text-gray-500 mt-1">Placed {new Date(order.created_at || order.createdAt || '').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Total</p>
-                  <p className="font-bold text-gray-900 text-lg">${Number(order.total_amount).toFixed(2)}</p>
+                  <p className="font-bold text-gray-900 text-lg">${Number(order.total_amount || order.totalAmount || 0).toFixed(2)}</p>
                 </div>
               </div>
 
@@ -128,27 +133,30 @@ export default function TrackOrderPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
                 {/* Shipping address */}
-                {order.shipping_address && (
+                {(order.shipping_address || order.shippingAddress) && (() => {
+                  const a = order.shipping_address || order.shippingAddress
+                  return (
                   <div className="p-6">
                     <div className="flex items-center gap-2 mb-4 text-[#7C3AED]">
                       <MapPin className="h-5 w-5" />
                       <p className="text-sm font-bold uppercase tracking-wider text-gray-900">Shipping To</p>
                     </div>
                     <div className="text-sm font-medium text-gray-600 space-y-1 pl-7">
-                      {order.shipping_address.full_name && <p className="font-bold text-gray-900 text-base mb-1">{order.shipping_address.full_name}</p>}
-                      {order.shipping_address.address_line1 && <p>{order.shipping_address.address_line1}</p>}
-                      <p>{[order.shipping_address.city, order.shipping_address.state, order.shipping_address.country].filter(Boolean).join(', ')}</p>
+                      {(a.fullName || a.full_name) && <p className="font-bold text-gray-900 text-base mb-1">{a.fullName || a.full_name}</p>}
+                      {(a.addressLine1 || a.address_line1) && <p>{a.addressLine1 || a.address_line1}</p>}
+                      <p>{[a.city, a.state, a.country].filter(Boolean).join(', ')}</p>
                     </div>
                   </div>
-                )}
+                  )
+                })()}
 
                 {/* Tracking number */}
-                {order.tracking_number && (
+                {(order.tracking_number || order.trackingNumber) && (
                   <div className="p-6">
                     <p className="text-sm font-bold uppercase tracking-wider text-gray-900 mb-4">Tracking Information</p>
                     <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
                       <p className="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-1">Tracking Number</p>
-                      <p className="font-mono font-bold text-gray-900 text-lg tracking-wider">{order.tracking_number}</p>
+                      <p className="font-mono font-bold text-gray-900 text-lg tracking-wider">{order.tracking_number || order.trackingNumber}</p>
                       {order.carrier && <p className="text-sm font-medium text-gray-600 mt-2 flex items-center gap-1.5"><Truck className="h-4 w-4" /> via {order.carrier}</p>}
                     </div>
                   </div>

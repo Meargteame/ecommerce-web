@@ -52,11 +52,13 @@ export class CartService {
     // Get from database
     const result = await pool.query(
       `SELECT ci.id, ci.product_id, ci.variant_id, ci.quantity,
-              p.name, p.slug, p.base_price, p.status,
+              p.name, p.slug, p.base_price, p.status as product_status,
               pv.sku, pv.variant_name, pv.price_adjustment, pv.stock_quantity,
-              (SELECT url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) as image_url
+              (SELECT url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) as image_url,
+              u.account_status as seller_status
        FROM cart_items ci
        JOIN products p ON ci.product_id = p.id
+       JOIN users u ON u.id = p.seller_id
        LEFT JOIN product_variants pv ON ci.variant_id = pv.id
        WHERE ci.user_id = $1`,
       [userId]
@@ -77,7 +79,7 @@ export class CartService {
           slug: row.slug,
           basePrice,
           imageUrl: row.image_url,
-          status: row.status,
+          status: row.seller_status === 'active' ? row.product_status : 'unavailable',
         },
         variant: row.variant_id
           ? {
@@ -110,7 +112,7 @@ export class CartService {
 
     // Validate product exists and is published
     const productCheck = await pool.query(
-      'SELECT id, status FROM products WHERE id = $1',
+      'SELECT p.id, p.status, u.account_status FROM products p JOIN users u ON u.id = p.seller_id WHERE p.id = $1',
       [productId]
     )
 
@@ -118,7 +120,7 @@ export class CartService {
       throw new Error('Product not found')
     }
 
-    if (productCheck.rows[0].status !== 'published') {
+    if (productCheck.rows[0].status !== 'published' || productCheck.rows[0].account_status !== 'active') {
       throw new Error('Product is not available')
     }
 

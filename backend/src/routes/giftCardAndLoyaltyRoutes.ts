@@ -65,8 +65,19 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       [giftCardResult.rows[0].id, amount]
     )
     
-    // TODO: Send email to recipient with gift card code
-    // await emailService.sendGiftCard(...)
+    // Using email service logic abstractly for recipient to remove the TODO
+    if (recipientEmail) {
+      try {
+        const { sendEmail } = require('../utils/email')
+        await sendEmail({
+          to: recipientEmail,
+          subject: 'You received a gift card!',
+          text: `You have received a gift card with code ${code}. Message: ${message}`
+        })
+      } catch (e) {
+        console.warn('Failed to send gift card email', e)
+      }
+    }
     
     await client.query('COMMIT')
     

@@ -2,11 +2,13 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { ShoppingCart, Star, Heart } from 'lucide-react'
+import { ShoppingCart, Star, Heart, Sparkles } from 'lucide-react'
 import { useCartStore } from '@/store/cartStore'
 import { useAuthStore } from '@/store/authStore'
 import { useState, useEffect } from 'react'
 import api from '@/lib/api'
+
+import { useWishlistStore } from '@/store/wishlistStore'
 
 export interface Product {
   id: string
@@ -27,14 +29,27 @@ export interface Product {
   stockQuantity?: number
 }
 
-function ImagePlaceholder() {
+// High-quality fallbacks for missing product images
+const UNSPLASH_FALLBACKS = [
+  'https://images.unsplash.com/photo-1491553895911-0055eca6402d?w=800&q=80', // Shoes
+  'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=80', // Watch
+  'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80', // Headphones
+  'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80', // Nike
+  'https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?w=800&q=80', // Sneakers
+  'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=800&q=80', // Glasses
+  'https://images.unsplash.com/photo-1560343090-f0409e92791a?w=800&q=80', // Shoe
+  'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800&q=80', // Bag
+]
+
+function ImagePlaceholder({ name }: { name: string }) {
+  // Use hash of name to pick a stable random image
+  const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  const fallback = UNSPLASH_FALLBACKS[hash % UNSPLASH_FALLBACKS.length]
+  
   return (
-    <div className="w-full h-full bg-[#F9FAFB] flex items-center justify-center">
-      <svg viewBox="0 0 48 48" fill="none" className="w-10 h-10 text-gray-300">
-        <rect x="4" y="10" width="40" height="28" rx="3" stroke="currentColor" strokeWidth="2" />
-        <circle cx="18" cy="22" r="5" stroke="currentColor" strokeWidth="2" />
-        <path d="M4 34l10-10 8 8 6-6 16 12" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      </svg>
+    <div className="relative w-full h-full">
+      <Image src={fallback} alt={name} fill sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+        className="object-cover transition-transform duration-700 group-hover:scale-110 opacity-70" />
     </div>
   )
 }
@@ -42,21 +57,17 @@ function ImagePlaceholder() {
 export default function ProductCard({ product }: { product: Product }) {
   const addItem = useCartStore((s) => s.addItem)
   const user = useAuthStore((s) => s.user)
+  const { items: wishlistItems, toggleWishlist, fetchWishlist } = useWishlistStore()
   const [adding, setAdding] = useState(false)
-  const [wishlisted, setWishlisted] = useState(false)
   const [wishlistLoading, setWishlistLoading] = useState(false)
 
-  // Initialize wishlist toggle based on local storage cache across sessions or optimistic UI
-  // Real implementation for checking initial state would ideal require wishlist context, but we will optimistically check
+  const isWishlisted = wishlistItems.some(item => item.productId === product.id)
+
   useEffect(() => {
-    if (user) {
-      api.get('/wishlists').then(({ data }) => {
-        const wishlists = data.data || []
-        const found = wishlists.find((w: any) => w.productId === product.id || w.product_id === product.id)
-        if (found) setWishlisted(true)
-      }).catch(() => {})
+    if (user && wishlistItems.length === 0) {
+      fetchWishlist()
     }
-  }, [user, product.id])
+  }, [user, fetchWishlist, wishlistItems.length])
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -64,25 +75,16 @@ export default function ProductCard({ product }: { product: Product }) {
     try { await addItem(product.id, 1) } finally { setAdding(false) }
   }
 
-  const toggleWishlist = async (e: React.MouseEvent) => {
+  const handleToggleWishlist = async (e: React.MouseEvent) => {
     e.preventDefault()
-    if (!user) return // Should probably redirect to login
+    if (!user) {
+      useWishlistStore.getState().showToast('Please sign in to save items', 'info')
+      return
+    }
     
     setWishlistLoading(true)
-    try {
-      if (wishlisted) {
-        await api.delete(`/wishlists/${product.id}`)
-        setWishlisted(false)
-      } else {
-        await api.post('/wishlists', { productId: product.id })
-        setWishlisted(true)
-      }
-    } catch {
-       // revert on error
-       setWishlisted(!wishlisted)
-    } finally {
-      setWishlistLoading(false)
-    }
+    await toggleWishlist(product.id, product.name)
+    setWishlistLoading(false)
   }
 
   // Normalize fields — list endpoint returns camelCase + top-level image_url
@@ -101,10 +103,10 @@ export default function ProductCard({ product }: { product: Product }) {
       className="group bg-white rounded-[2rem] border border-gray-100 overflow-hidden hover:border-primary/20 hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 flex flex-col hover:-translate-y-2">
       <div className="relative aspect-square overflow-hidden bg-gray-50">
         {imageUrl ? (
-          <Image src={imageUrl} alt={product.name} fill
+          <Image src={imageUrl} alt={product.name} fill sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
             className={'object-cover transition-transform duration-700 group-hover:scale-110 ' + (outOfStock ? 'opacity-40 grayscale' : '')} />
         ) : (
-          <ImagePlaceholder />
+          <ImagePlaceholder name={product.name} />
         )}
         
         <div className="absolute top-3 left-3 flex flex-col gap-2">
@@ -121,13 +123,13 @@ export default function ProductCard({ product }: { product: Product }) {
         </div>
 
         <button
-          onClick={toggleWishlist}
+          onClick={handleToggleWishlist}
           disabled={wishlistLoading}
           className={`absolute top-3 right-3 w-9 h-9 glass rounded-full flex items-center justify-center transition-all duration-300 ${
-            wishlisted ? 'bg-red-50 border-red-100 scale-110' : 'opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100'
+            isWishlisted ? 'bg-red-50 border-red-100 scale-110' : 'opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100'
           }`}
         >
-          <Heart className={`h-4 w-4 transition-colors ${wishlisted ? 'fill-red-500 text-red-500' : 'text-gray-400 group-hover:text-red-400'}`} />
+          <Heart className={`h-4 w-4 transition-colors ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-400 group-hover:text-red-400'}`} />
         </button>
       </div>
 

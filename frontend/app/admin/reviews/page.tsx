@@ -35,15 +35,15 @@ export default function AdminReviewsPage() {
 
   const columns = [
     {
-      title: 'Product', dataIndex: 'product_name', key: 'product_name',
+      title: 'Product', dataIndex: 'productName', key: 'productName',
       render: (n: string) => <Text strong>{n}</Text>
     },
     {
       title: 'Reviewer', key: 'reviewer',
       render: (_: any, r: any) => (
         <div>
-          <Text style={{ display: 'block', fontSize: 13 }}>{r.first_name} {r.last_name}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>{r.user_email}</Text>
+          <Text style={{ display: 'block', fontSize: 13 }}>{r.firstName} {r.lastName}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{r.userEmail}</Text>
         </div>
       )
     },
@@ -61,10 +61,10 @@ export default function AdminReviewsPage() {
       )
     },
     {
-      title: 'Verified', dataIndex: 'is_verified_purchase', key: 'is_verified_purchase',
+      title: 'Verified', dataIndex: 'isVerifiedPurchase', key: 'isVerifiedPurchase',
       render: (v: boolean) => <Tag color={v ? 'green' : 'default'}>{v ? 'Verified' : 'Unverified'}</Tag>
     },
-    { title: 'Date', dataIndex: 'created_at', key: 'created_at', render: (d: string) => d ? new Date(d).toLocaleDateString() : '—' },
+    { title: 'Date', dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => d ? new Date(d).toLocaleDateString() : '—' },
     {
       title: 'Actions', key: 'actions',
       render: (_: any, r: any) => (

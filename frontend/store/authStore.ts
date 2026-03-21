@@ -6,6 +6,8 @@ interface User {
   email: string
   first_name: string
   last_name: string
+  phone?: string
+  avatarUrl?: string
   role: string
 }
 
@@ -13,10 +15,11 @@ interface AuthState {
   user: User | null
   token: string | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
-  register: (data: RegisterData) => Promise<void>
+  login: (email: string, password: string) => Promise<User>
+  register: (data: RegisterData) => Promise<User>
   logout: () => Promise<void>
   loadUser: () => void
+  fetchUser: () => Promise<void>
   setUser: (user: User) => void
 }
 
@@ -35,9 +38,9 @@ async function mergeGuestCart(guestItems: any[]): Promise<void> {
   for (const item of guestItems) {
     try {
       await api.post('/cart/items', {
-        product_id: item.product_id,
+        productId: item.productId || item.product_id,
         quantity: item.quantity,
-        variant_id: item.variant_id || undefined,
+        variantId: item.variantId || item.variant_id || undefined,
       })
     } catch {
       // Ignore individual item errors (e.g. out of stock) — best-effort merge
@@ -64,6 +67,26 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
+  fetchUser: async () => {
+    try {
+      const { data } = await api.get('/users/profile')
+      const raw = data.data
+      const user: User = {
+        id: raw.id,
+        email: raw.email,
+        first_name: raw.firstName || raw.first_name || '',
+        last_name: raw.lastName || raw.last_name || '',
+        phone: raw.phone || '',
+        avatarUrl: raw.avatarUrl || raw.avatar_url || '',
+        role: raw.role,
+      }
+      localStorage.setItem('user', JSON.stringify(user))
+      set({ user })
+    } catch (err) {
+      console.error('Failed to fetch user', err)
+    }
+  },
+
   login: async (email, password) => {
     set({ loading: true })
     try {
@@ -82,6 +105,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         email: raw.email,
         first_name: raw.firstName || raw.first_name || '',
         last_name: raw.lastName || raw.last_name || '',
+        phone: raw.phone || '',
+        avatarUrl: raw.avatarUrl || raw.avatar_url || '',
         role: raw.role,
       }
 
@@ -95,6 +120,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         const { useCartStore } = await import('./cartStore')
         await useCartStore.getState().fetchCart()
       } catch {}
+
+      return user
     } catch (err) {
       set({ loading: false })
       throw err
@@ -118,6 +145,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         email: raw.email,
         first_name: raw.firstName || raw.first_name || '',
         last_name: raw.lastName || raw.last_name || '',
+        phone: raw.phone || '',
+        avatarUrl: raw.avatarUrl || raw.avatar_url || '',
         role: raw.role,
       }
 
@@ -130,6 +159,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         const { useCartStore } = await import('./cartStore')
         await useCartStore.getState().fetchCart()
       } catch {}
+
+      return user
     } catch (err) {
       set({ loading: false })
       throw err
@@ -140,6 +171,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try { await api.post('/auth/logout') } catch {}
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    localStorage.clear() // Extra safety to clear any other stale auth keys
     // Clear cart state on logout
     try {
       const { useCartStore } = await import('./cartStore')

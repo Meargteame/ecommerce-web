@@ -25,8 +25,14 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
       const decoded = verifyAccessToken(token)
       req.user = decoded
       next()
-    } catch (error) {
-      res.status(401).json({ error: 'Invalid or expired token' })
+    } catch (error: any) {
+      console.error('[AUTH DEBUG] Token verification failed:', {
+        message: error.message,
+        name: error.name,
+        expiredAt: error.expiredAt,
+        token: token.substring(0, 10) + '...'
+      })
+      res.status(401).json({ error: 'Invalid or expired token', details: error.message })
       return
     }
   } catch (error) {

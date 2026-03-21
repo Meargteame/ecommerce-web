@@ -38,8 +38,8 @@ export default function AdminCategoriesPage() {
       name: record.name,
       slug: record.slug,
       description: record.description,
-      image_url: record.image_url,
-      display_order: record.display_order,
+      imageUrl: record.imageUrl,
+      displayOrder: record.displayOrder,
     })
     setModalOpen(true)
   }
@@ -78,8 +78,8 @@ export default function AdminCategoriesPage() {
       title: 'Category', key: 'name',
       render: (_: any, r: any) => (
         <Space>
-          {r.image_url
-            ? <img src={r.image_url} alt={r.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6 }} />
+          {r.imageUrl
+            ? <img src={r.imageUrl} alt={r.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6 }} />
             : <div style={{ width: 32, height: 32, background: '#f5f3ff', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FolderOutlined style={{ color: '#7c3aed' }} /></div>
           }
           <div>
@@ -89,8 +89,8 @@ export default function AdminCategoriesPage() {
         </Space>
       )
     },
-    { title: 'Products', dataIndex: 'product_count', key: 'product_count', render: (v: number) => <Tag color="blue">{v ?? 0}</Tag> },
-    { title: 'Order', dataIndex: 'display_order', key: 'display_order' },
+    { title: 'Products', dataIndex: 'productCount', key: 'productCount', render: (v: number) => <Tag color="blue">{v ?? 0}</Tag> },
+    { title: 'Order', dataIndex: 'displayOrder', key: 'displayOrder' },
     { title: 'Description', dataIndex: 'description', key: 'description', render: (d: string) => d || '—', ellipsis: true },
     {
       title: 'Actions', key: 'actions',
@@ -138,10 +138,10 @@ export default function AdminCategoriesPage() {
           <Form.Item name="description" label="Description">
             <Input.TextArea rows={2} />
           </Form.Item>
-          <Form.Item name="image_url" label="Image URL">
+          <Form.Item name="imageUrl" label="Image URL">
             <Input placeholder="https://..." />
           </Form.Item>
-          <Form.Item name="display_order" label="Display Order" initialValue={0}>
+          <Form.Item name="displayOrder" label="Display Order" initialValue={0}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </Form>

@@ -27,9 +27,8 @@ describe('CartService', () => {
 
   describe('getCart', () => {
     it('returns empty cart for user with no items', async () => {
-      mockPool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'cart-1', user_id: 'u1', session_id: null }], rowCount: 1 } as any)
-        .mockResolvedValueOnce({ rows: [], rowCount: 0 } as any)
+      ;(mockPool.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
 
       const cart = await cartService.getCart('u1')
       expect(cart.items).toHaveLength(0)
@@ -38,14 +37,14 @@ describe('CartService', () => {
   })
 
   describe('validateCart', () => {
-    it('returns valid for empty cart', async () => {
-      mockPool.query
-        .mockResolvedValueOnce({ rows: [{ id: 'cart-1', user_id: 'u1', session_id: null }], rowCount: 1 } as any)
-        .mockResolvedValueOnce({ rows: [], rowCount: 0 } as any)
-
+    it('returns invalid for empty cart', async () => {
+      // getCart needs zero items
+      ;(mockPool.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }) 
+        
       const result = await cartService.validateCart('u1')
-      expect(result.valid).toBe(true)
-      expect(result.errors).toHaveLength(0)
+      expect(result.valid).toBe(false)
+      expect(result.errors).toContain('Cart is empty')
     })
   })
 })

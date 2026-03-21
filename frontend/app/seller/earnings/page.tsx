@@ -19,10 +19,10 @@ export default function SellerEarningsPage() {
   const fmt = (n: any) => `$${Number(n || 0).toFixed(2)}`
 
   const cards = [
-    { label: 'Gross Revenue', value: fmt(s?.gross_revenue), icon: DollarSign, color: 'bg-purple-50 text-[#7C3AED]', desc: 'Before platform fee' },
-    { label: 'Net Earnings', value: fmt(s?.net_revenue), icon: TrendingUp, color: 'bg-green-50 text-green-700', desc: 'After 10% platform fee' },
-    { label: 'Platform Fee', value: fmt(s?.platform_fee), icon: Percent, color: 'bg-orange-50 text-orange-600', desc: '10% commission' },
-    { label: 'Total Orders', value: s?.total_orders ?? 0, icon: ShoppingBag, color: 'bg-blue-50 text-blue-600', desc: 'Completed orders' },
+    { label: 'Gross Revenue', value: fmt(s?.grossRevenue), icon: DollarSign, color: 'bg-purple-50 text-[#7C3AED]', desc: 'Before platform fee' },
+    { label: 'Net Earnings', value: fmt(s?.netRevenue), icon: TrendingUp, color: 'bg-green-50 text-green-700', desc: `After ${s?.commissionRate || 10}% platform fee` },
+    { label: 'Platform Fee', value: fmt(s?.platformFee), icon: Percent, color: 'bg-orange-50 text-orange-600', desc: `${s?.commissionRate || 10}% commission` },
+    { label: 'Total Orders', value: s?.totalOrders ?? 0, icon: ShoppingBag, color: 'bg-blue-50 text-blue-600', desc: 'Completed orders' },
   ]
 
   return (
@@ -71,7 +71,7 @@ export default function SellerEarningsPage() {
                         />
                       </div>
                       <span className="text-sm font-semibold text-gray-900 w-24 text-right">
-                        {fmt(m.net_revenue)}
+                        {fmt(m.netRevenue)}
                       </span>
                       <span className="text-xs text-gray-400 w-16 text-right">
                         {m.orders} orders
@@ -103,10 +103,10 @@ export default function SellerEarningsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {data.recentPayouts.map((t: any) => (
-                    <tr key={t.order_number} className="hover:bg-gray-50">
-                      <td className="px-5 py-3.5 font-medium text-gray-900">{t.order_number || '—'}</td>
+                    <tr key={t.orderNumber} className="hover:bg-gray-50">
+                      <td className="px-5 py-3.5 font-medium text-gray-900">{t.orderNumber || '—'}</td>
                       <td className="px-5 py-3.5 text-gray-500 text-xs">
-                        {new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {new Date(t.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </td>
                       <td className="px-5 py-3.5">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -118,7 +118,7 @@ export default function SellerEarningsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-red-500 text-xs">-{fmt(t.fee)}</td>
-                      <td className="px-5 py-3.5 text-right font-semibold text-green-700">{fmt(t.net_amount)}</td>
+                      <td className="px-5 py-3.5 text-right font-semibold text-green-700">{fmt(t.netAmount)}</td>
                     </tr>
                   ))}
                 </tbody>

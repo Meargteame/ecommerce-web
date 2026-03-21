@@ -40,7 +40,7 @@ export default function AdminSupportPage() {
 
   const openTicket = (ticket: any) => {
     setSelected(ticket)
-    form.setFieldsValue({ status: ticket.status, admin_response: ticket.admin_response || '' })
+    form.setFieldsValue({ status: ticket.status, adminResponse: ticket.adminResponse || '' })
     setModalOpen(true)
   }
 
@@ -59,8 +59,8 @@ export default function AdminSupportPage() {
       title: 'User', key: 'user',
       render: (_: any, r: any) => (
         <div>
-          <Text style={{ fontSize: 13 }}>{r.first_name} {r.last_name}</Text>
-          <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{r.user_email}</Text>
+          <Text style={{ fontSize: 13 }}>{r.firstName} {r.lastName}</Text>
+          <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{r.userEmail}</Text>
         </div>
       )
     },
@@ -73,7 +73,7 @@ export default function AdminSupportPage() {
       title: 'Status', dataIndex: 'status', key: 'status',
       render: (s: string) => <Tag color={STATUS_COLORS[s] || 'default'}>{s?.replace('_', ' ').toUpperCase()}</Tag>
     },
-    { title: 'Date', dataIndex: 'created_at', key: 'created_at', render: (d: string) => d ? new Date(d).toLocaleDateString() : '—' },
+    { title: 'Date', dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => d ? new Date(d).toLocaleDateString() : '—' },
     {
       title: 'Actions', key: 'actions',
       render: (_: any, r: any) => (
@@ -119,7 +119,7 @@ export default function AdminSupportPage() {
           <>
             <Descriptions bordered size="small" column={1} style={{ marginBottom: 16 }}>
               <Descriptions.Item label="Subject">{selected.subject}</Descriptions.Item>
-              <Descriptions.Item label="From">{selected.first_name} {selected.last_name} ({selected.user_email})</Descriptions.Item>
+              <Descriptions.Item label="From">{selected.firstName} {selected.lastName} ({selected.userEmail})</Descriptions.Item>
               <Descriptions.Item label="Category"><Tag>{selected.category}</Tag></Descriptions.Item>
               <Descriptions.Item label="Message">{selected.message}</Descriptions.Item>
             </Descriptions>
@@ -132,7 +132,7 @@ export default function AdminSupportPage() {
                   <Select.Option value="closed">Closed</Select.Option>
                 </Select>
               </Form.Item>
-              <Form.Item name="admin_response" label="Admin Response">
+              <Form.Item name="adminResponse" label="Admin Response">
                 <Input.TextArea rows={4} placeholder="Write your response to the user..." />
               </Form.Item>
             </Form>

@@ -21,14 +21,14 @@ export default function SellerAnalyticsPage() {
   const fmt = (n: any) => `$${Number(n || 0).toFixed(2)}`
 
   const metrics = [
-    { label: 'Gross Revenue', value: loading ? '—' : fmt(earnings?.summary?.gross_revenue), icon: DollarSign, color: 'bg-purple-50 text-[#7C3AED]', desc: 'All time' },
-    { label: 'Net Earnings', value: loading ? '—' : fmt(earnings?.summary?.net_revenue), icon: TrendingUp, color: 'bg-green-50 text-green-700', desc: 'After fees' },
+    { label: 'Gross Revenue', value: loading ? '—' : fmt(earnings?.summary?.grossRevenue), icon: DollarSign, color: 'bg-purple-50 text-[#7C3AED]', desc: 'All time' },
+    { label: 'Net Earnings', value: loading ? '—' : fmt(earnings?.summary?.netRevenue), icon: TrendingUp, color: 'bg-green-50 text-green-700', desc: 'After fees' },
     { label: 'Total Orders', value: loading ? '—' : (stats?.totalOrders ?? 0), icon: ShoppingBag, color: 'bg-blue-50 text-blue-600', desc: 'Completed' },
     { label: 'Products Listed', value: loading ? '—' : (stats?.totalProducts ?? 0), icon: Package, color: 'bg-purple-50 text-[#7C3AED]', desc: 'Active listings' },
   ]
 
   const monthly = earnings?.monthly || []
-  const maxRevenue = monthly.length > 0 ? Math.max(...monthly.map((m: any) => Number(m.net_revenue))) : 1
+  const maxRevenue = monthly.length > 0 ? Math.max(...monthly.map((m: any) => Number(m.netRevenue))) : 1
 
   return (
     <div className="p-8">
@@ -65,7 +65,7 @@ export default function SellerAnalyticsPage() {
         ) : (
           <div className="flex items-end gap-3 h-40">
             {[...monthly].reverse().map((m: any) => {
-              const height = maxRevenue > 0 ? Math.max((Number(m.net_revenue) / maxRevenue) * 100, 4) : 4
+              const height = maxRevenue > 0 ? Math.max((Number(m.netRevenue) / maxRevenue) * 100, 4) : 4
               const month = new Date(m.month).toLocaleDateString('en-US', { month: 'short' })
               return (
                 <div key={m.month} className="flex-1 flex flex-col items-center gap-1.5 group">
@@ -73,10 +73,10 @@ export default function SellerAnalyticsPage() {
                     <div
                       className="w-full rounded-t-lg transition-colors cursor-default"
                       style={{ height: `${height}%`, backgroundColor: '#7C3AED' }}
-                      title={`${fmt(m.net_revenue)} · ${m.orders} orders`}
+                      title={`${fmt(m.netRevenue)} · ${m.orders} orders`}
                     />
                     <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                      {fmt(m.net_revenue)}
+                      {fmt(m.netRevenue)}
                     </div>
                   </div>
                   <span className="text-xs text-gray-400">{month}</span>
@@ -106,7 +106,7 @@ export default function SellerAnalyticsPage() {
               <Star className="h-4 w-4 text-yellow-500" />
               <p className="text-sm font-medium text-gray-700">Platform Fee Rate</p>
             </div>
-            <p className="text-2xl font-bold text-gray-900">10%</p>
+            <p className="text-2xl font-bold text-gray-900">{earnings?.summary?.commissionRate || 10}%</p>
             <p className="text-xs text-gray-400 mt-1">Per transaction</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5">

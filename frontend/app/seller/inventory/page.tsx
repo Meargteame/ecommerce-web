@@ -34,8 +34,8 @@ export default function SellerInventoryPage() {
     if (isNaN(qty) || qty < 0) return
     setSaving(true)
     try {
-      await api.put(`/seller/inventory/${id}`, { stock_quantity: qty })
-      setProducts(prev => prev.map(p => p.id === id ? { ...p, stock_quantity: qty } : p))
+      await api.put(`/seller/inventory/${id}`, { stockQuantity: qty })
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, stockQuantity: qty } : p))
       setEditing(null)
     } catch {
       alert('Failed to update stock')
@@ -44,8 +44,8 @@ export default function SellerInventoryPage() {
     }
   }
 
-  const lowStock = products.filter(p => p.stock_quantity <= 5 && p.stock_quantity > 0)
-  const outOfStock = products.filter(p => p.stock_quantity === 0)
+  const lowStock = products.filter(p => p.stockQuantity <= 5 && p.stockQuantity > 0)
+  const outOfStock = products.filter(p => p.stockQuantity === 0)
 
   return (
     <div className="p-8">
@@ -98,8 +98,8 @@ export default function SellerInventoryPage() {
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      {p.image_url ? (
-                        <img src={p.image_url} alt={p.name}
+                      {p.imageUrl ? (
+                        <img src={p.imageUrl} alt={p.name}
                           className="w-9 h-9 object-cover rounded-lg border border-gray-100 shrink-0" />
                       ) : (
                         <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
@@ -112,12 +112,12 @@ export default function SellerInventoryPage() {
                   <td className="px-5 py-4 text-gray-500 font-mono text-xs">{p.sku || '—'}</td>
                   <td className="px-5 py-4">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      p.stock_quantity === 0 ? 'bg-red-100 text-red-700'
-                      : p.stock_quantity <= 5 ? 'bg-yellow-100 text-yellow-700'
+                      p.stockQuantity === 0 ? 'bg-red-100 text-red-700'
+                      : p.stockQuantity <= 5 ? 'bg-yellow-100 text-yellow-700'
                       : 'bg-green-100 text-green-700'
                     }`}>
-                      {p.stock_quantity === 0 ? 'Out of stock'
-                        : p.stock_quantity <= 5 ? 'Low stock'
+                      {p.stockQuantity === 0 ? 'Out of stock'
+                        : p.stockQuantity <= 5 ? 'Low stock'
                         : 'In stock'}
                     </span>
                   </td>
@@ -144,12 +144,12 @@ export default function SellerInventoryPage() {
                         </button>
                       </div>
                     ) : (
-                      <span className="font-semibold text-gray-900">{p.stock_quantity ?? 0}</span>
+                      <span className="font-semibold text-gray-900">{p.stockQuantity ?? 0}</span>
                     )}
                   </td>
                   <td className="px-5 py-4 text-right">
                     {editing !== p.id && (
-                      <button onClick={() => startEdit(p.id, p.stock_quantity ?? 0)}
+                      <button onClick={() => startEdit(p.id, p.stockQuantity ?? 0)}
                         className="p-1.5 text-gray-400 hover:bg-purple-50 rounded-lg transition-colors"
                         onMouseEnter={e => (e.currentTarget.style.color = '#7C3AED')}
                         onMouseLeave={e => (e.currentTarget.style.color = '')}>

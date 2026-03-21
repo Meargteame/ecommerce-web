@@ -12,6 +12,7 @@ interface CreateProductDTO {
   status?: 'draft' | 'published' | 'archived'
   sellerId?: string
   sku?: string
+  stockQuantity?: number
 }
 
 interface UpdateProductDTO extends Partial<CreateProductDTO> {}
@@ -103,11 +104,13 @@ export class ProductService {
       resolvedSellerId = adminResult.rows[0].id
     }
 
+    const stockQuantity = (data as any).stock_quantity ?? (data as any).stockQuantity ?? 0
+
     const result = await pool.query(
-      `INSERT INTO products (seller_id, name, slug, description, specifications, base_price, price, sku, category_id, brand, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10)
+      `INSERT INTO products (seller_id, name, slug, description, specifications, base_price, price, sku, category_id, brand, status, stock_quantity)
+       VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
-      [resolvedSellerId, name, slug, description || null, JSON.stringify(specifications || {}), basePrice, sku, categoryId, brand || null, status]
+      [resolvedSellerId, name, slug, description || null, JSON.stringify(specifications || {}), basePrice, sku, categoryId, brand || null, status, stockQuantity]
     )
 
     return this.mapProduct(result.rows[0])
@@ -130,7 +133,10 @@ export class ProductService {
     }
 
     // Get from database
-    const result = await pool.query('SELECT * FROM products WHERE id = $1', [id])
+    const result = await pool.query(
+      'SELECT p.* FROM products p JOIN users u ON u.id = p.seller_id WHERE p.id = $1 AND u.account_status = $2', 
+      [id, 'active']
+    )
 
     if (result.rows.length === 0) {
       return null
@@ -150,7 +156,10 @@ export class ProductService {
   }
 
   async getProductBySlug(slug: string, incrementView = false): Promise<Product | null> {
-    const result = await pool.query('SELECT * FROM products WHERE slug = $1', [slug])
+    const result = await pool.query(
+      'SELECT p.* FROM products p JOIN users u ON u.id = p.seller_id WHERE p.slug = $1 AND u.account_status = $2', 
+      [slug, 'active']
+    )
 
     if (result.rows.length === 0) {
       return null
@@ -180,6 +189,7 @@ export class ProductService {
       'categoryId',
       'brand',
       'status',
+      'stockQuantity',
     ]
 
     const dbFields = [
@@ -191,6 +201,7 @@ export class ProductService {
       'category_id',
       'brand',
       'status',
+      'stock_quantity',
     ]
 
     fields.forEach((field, index) => {
@@ -235,14 +246,21 @@ export class ProductService {
   }
 
   async deleteProduct(id: string): Promise<void> {
-    const result = await pool.query('DELETE FROM products WHERE id = $1', [id])
+    try {
+      const result = await pool.query('DELETE FROM products WHERE id = $1', [id])
 
-    if (result.rowCount === 0) {
-      throw new Error('Product not found')
+      if (result.rowCount === 0) {
+        throw new Error('Product not found')
+      }
+
+      // Invalidate cache
+      await cache.del(`product:${id}`)
+    } catch (error: any) {
+      if (error.code === '23503') {
+        throw new Error('Cannot delete this product because it is linked to past orders. Please change status to Archived instead.')
+      }
+      throw error
     }
-
-    // Invalidate cache
-    await cache.del(`product:${id}`)
   }
 
   async listProducts(filters: ProductFilters): Promise<{ products: Product[]; total: number }> {
@@ -258,7 +276,7 @@ export class ProductService {
     if (cached) return JSON.parse(cached)
 
     // Build conditions with p. prefix for use in JOIN queries
-    const conditions: string[] = []
+    const conditions: string[] = ["u.account_status = 'active'"]
     const values: any[] = []
     let p = 1
 
@@ -286,7 +304,7 @@ export class ProductService {
 
     // Count query — uses same conditions (already p. prefixed)
     const countResult = await pool.query(
-      `SELECT COUNT(*) as total FROM products p ${whereClause}`,
+      `SELECT COUNT(*) as total FROM products p JOIN users u ON u.id = p.seller_id ${whereClause}`,
       values
     )
     const total = parseInt(countResult.rows[0].total)
@@ -297,6 +315,7 @@ export class ProductService {
       `SELECT p.*, c.name as category_name,
               (SELECT pi.url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as image_url
        FROM products p
+       JOIN users u ON u.id = p.seller_id
        LEFT JOIN categories c ON c.id = p.category_id
        ${whereClause}
        ${orderBy}

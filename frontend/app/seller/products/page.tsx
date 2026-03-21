@@ -104,32 +104,32 @@ export default function SellerProductsPage() {
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      {p.image_url ? (
-                        <img src={p.image_url} alt={p.name}
-                          className="w-10 h-10 object-cover rounded-lg border border-gray-100 shrink-0" />
-                      ) : (
-                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
-                          <Package className="h-4 w-4 text-gray-400" />
-                        </div>
-                      )}
-                      <div>
-                        <p className="font-medium text-gray-900 line-clamp-1">{p.name}</p>
-                        {p.category_name && (
-                          <p className="text-xs text-gray-400 mt-0.5">{p.category_name}</p>
-                        )}
+                    {p.imageUrl ? (
+                      <img src={p.imageUrl} alt={p.name}
+                        className="w-10 h-10 object-cover rounded-lg border border-gray-100 shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                        <Package className="h-4 w-4 text-gray-400" />
                       </div>
+                    )}
+                    <div>
+                      <p className="font-medium text-gray-900 line-clamp-1">{p.name}</p>
+                      {p.categoryName && (
+                        <p className="text-xs text-gray-400 mt-0.5">{p.categoryName}</p>
+                      )}
+                    </div>
                     </div>
                   </td>
                   <td className="px-5 py-4 text-gray-700 font-medium">
-                    ${Number(p.base_price || p.price || 0).toFixed(2)}
+                    ${Number(p.basePrice || p.price || 0).toFixed(2)}
                   </td>
                   <td className="px-5 py-4">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      (p.stock_quantity || 0) > 10 ? 'bg-green-100 text-green-700'
-                      : (p.stock_quantity || 0) > 0 ? 'bg-yellow-100 text-yellow-700'
+                      (p.stockQuantity || 0) > 10 ? 'bg-green-100 text-green-700'
+                      : (p.stockQuantity || 0) > 0 ? 'bg-yellow-100 text-yellow-700'
                       : 'bg-red-100 text-red-700'
                     }`}>
-                      {p.stock_quantity ?? 0} in stock
+                      {p.stockQuantity ?? 0} in stock
                     </span>
                   </td>
                   <td className="px-5 py-4">

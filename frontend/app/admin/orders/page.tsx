@@ -23,9 +23,9 @@ export default function AdminOrdersPage() {
   const fetchOrders = async (p = page) => {
     setLoading(true)
     try {
-      const params: any = { page: p, limit: 20 }
+      const params: any = { offset: (p - 1) * 20, limit: 20 }
       if (status) params.status = status
-      const { data } = await api.get('/orders', { params })
+      const { data } = await api.get('/admin/orders', { params })
       setOrders(data.data?.orders || [])
       setTotal(data.data?.total || 0)
     } catch { setOrders([]) }
@@ -39,10 +39,10 @@ export default function AdminOrdersPage() {
   }
 
   const columns = [
-    { title: 'Order ID', dataIndex: 'id', key: 'id', render: (id: string) => <Typography.Text code>#{id?.slice(0, 8)}</Typography.Text> },
-    { title: 'Customer', dataIndex: 'user_email', key: 'user_email' },
-    { title: 'Items', dataIndex: 'item_count', key: 'item_count', render: (v: number) => `${v || 0} items` },
-    { title: 'Total', dataIndex: 'total_amount', key: 'total_amount', render: (v: number) => `$${Number(v || 0).toFixed(2)}`, sorter: true },
+    { title: 'Order Number', dataIndex: 'orderNumber', key: 'orderNumber', render: (n: string) => <Typography.Text code>#{n}</Typography.Text> },
+    { title: 'Customer', dataIndex: 'customerEmail', key: 'customerEmail' },
+    { title: 'Items', dataIndex: 'itemCount', key: 'itemCount', render: (v: number) => `${v || 0} items` },
+    { title: 'Total', dataIndex: 'totalAmount', key: 'totalAmount', render: (v: number) => `$${Number(v || 0).toFixed(2)}`, sorter: (a: any, b: any) => a.totalAmount - b.totalAmount },
     {
       title: 'Status', dataIndex: 'status', key: 'status',
       render: (s: string, record: any) => (
@@ -51,7 +51,7 @@ export default function AdminOrdersPage() {
         </Select>
       )
     },
-    { title: 'Date', dataIndex: 'created_at', key: 'created_at', render: (d: string) => d ? new Date(d).toLocaleDateString() : '—' },
+    { title: 'Date', dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => d ? new Date(d).toLocaleDateString() : '—' },
   ]
 
   return (

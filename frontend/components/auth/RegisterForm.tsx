@@ -36,8 +36,10 @@ export default function RegisterForm() {
     const failedRules = passwordRules.filter((r) => !r.test(form.password))
     if (failedRules.length > 0) { setError(`Password must have: ${failedRules.map((r) => r.label.toLowerCase()).join(', ')}`); return }
     try {
-      await register({ firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password, role })
-      router.push(role === 'seller' ? '/seller' : '/')
+      const user = await register({ firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password, role })
+      if (user?.role === 'admin') router.push('/admin')
+      else if (user?.role === 'seller') router.push('/seller')
+      else router.push('/')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data?.error
         || (err as { response?: { data?: { message?: string } } })?.response?.data?.message

@@ -13,8 +13,8 @@ const brands = [
 
 export default function ShopByBrandSection() {
   return (
-    <section className="w-full px-4 sm:px-6 lg:px-8 py-2">
-      <div className="bg-white border border-[#E5E7EB] p-5">
+    <section className="max-w-[1920px] mx-auto px-6 lg:px-12 py-8">
+      <div className="bg-white p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-[#111111]">Shop by Brand</h2>
           <Link href="/products" className="text-sm font-medium text-[#7C3AED] hover:underline">

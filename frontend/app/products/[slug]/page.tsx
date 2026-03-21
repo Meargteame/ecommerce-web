@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Image from 'next/image'
@@ -10,6 +12,7 @@ import api from '@/lib/api'
 import ReviewForm from '@/components/product/ReviewForm'
 import ProductGrid from '@/components/product/ProductGrid'
 import { useAuthStore } from '@/store/authStore'
+import { useWishlistStore } from '@/store/wishlistStore'
 import { Star, ShoppingCart, Heart, Truck, Shield, RotateCcw, ChevronRight, Share2, Check } from 'lucide-react'
 
 interface ProductDetail {
@@ -45,8 +48,10 @@ export default function ProductDetailPage() {
   const [selectedVariant, setSelectedVariant] = useState<string | undefined>()
   const [quantity, setQuantity] = useState(1)
   const [adding, setAdding] = useState(false)
-  const [wishlisted, setWishlisted] = useState(false)
   const [shared, setShared] = useState(false)
+
+  const { items: wishlistItems, toggleWishlist, fetchWishlist } = useWishlistStore()
+  const isWishlisted = wishlistItems.some((item: any) => item.productId === product?.id)
   
   const addItem = useCartStore((s) => s.addItem)
   const user = useAuthStore((s) => s.user)
@@ -77,26 +82,17 @@ export default function ProductDetailPage() {
       })
       .catch(() => setLoading(false))
 
-    if (user) {
-      api.get('/wishlists').then(({ data }) => {
-        const wishlists = data.data || [];
-        const found = wishlists.find((w: any) => w.product?.slug === slug || w.productId === product?.id || w.product_id === product?.id);
-        if (found) setWishlisted(true);
-      }).catch(() => {})
+    if (user && wishlistItems.length === 0) {
+      fetchWishlist()
     }
-  }, [slug, user, product?.id, fetchRelated])
+  }, [slug, user, fetchRelated, fetchWishlist, wishlistItems.length])
 
-  const toggleWishlist = async () => {
-    if (!product || !user) return 
-    try {
-      if (wishlisted) {
-        await api.delete(`/wishlists/${product.id}`)
-        setWishlisted(false)
-      } else {
-        await api.post('/wishlists', { productId: product.id })
-        setWishlisted(true)
-      }
-    } catch (err) { console.error(err) }
+  const handleToggleWishlist = async () => {
+    if (!product || !user) {
+      if (!user) useWishlistStore.getState().showToast('Please sign in to save items', 'info')
+      return 
+    }
+    await toggleWishlist(product.id, product.name)
   }
 
   const handleShare = () => {
@@ -220,8 +216,8 @@ export default function ProductDetailPage() {
                   </div>
                 )}
                 <div className="h-4 w-px bg-gray-100" />
-                <div className="flex items-center gap-2 group cursor-pointer">
-                  <Heart className={`h-4 w-4 transition-colors ${wishlisted ? 'fill-red-500 text-red-500' : 'text-gray-300 group-hover:text-red-400'}`} />
+                <div className="flex items-center gap-2 group cursor-pointer" onClick={handleToggleWishlist}>
+                  <Heart className={`h-4 w-4 transition-colors ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-300 group-hover:text-red-400'}`} />
                   <span className="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-gray-900 transition-colors">Wishlist</span>
                 </div>
               </div>
@@ -291,9 +287,9 @@ export default function ProductDetailPage() {
                   <ShoppingCart className="h-5 w-5" />
                   {adding ? 'Processing...' : stockQty === 0 ? 'Out of Stock' : 'Add to Bag'}
                 </button>
-                <button onClick={toggleWishlist}
-                  className={`flex-1 flex items-center justify-center rounded-2xl border-2 transition-all duration-300 ${wishlisted ? 'border-red-500 bg-red-50 text-red-500' : 'border-gray-100 text-gray-400 hover:border-red-200 hover:text-red-400 hover:bg-red-50/50'}`}>
-                  <Heart className={`h-6 w-6 ${wishlisted ? 'fill-red-500' : ''}`} />
+                <button onClick={handleToggleWishlist}
+                  className={`flex-1 flex items-center justify-center rounded-2xl border-2 transition-all duration-300 ${isWishlisted ? 'border-red-500 bg-red-50 text-red-500' : 'border-gray-100 text-gray-400 hover:border-red-200 hover:text-red-400 hover:bg-red-50/50'}`}>
+                  <Heart className={`h-6 w-6 ${isWishlisted ? 'fill-red-500' : ''}`} />
                 </button>
               </div>
             </div>

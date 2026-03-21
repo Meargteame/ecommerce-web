@@ -1,0 +1,34 @@
+                                         Table "public.payments"
+       Column        |            Type             | Collation | Nullable |           Default            
+---------------------+-----------------------------+-----------+----------+------------------------------
+ id                  | uuid                        |           | not null | uuid_generate_v4()
+ order_id            | uuid                        |           | not null | 
+ payment_method      | character varying(50)       |           | not null | 
+ payment_provider_id | character varying(255)      |           |          | 
+ amount              | numeric(10,2)               |           | not null | 
+ currency            | character varying(3)        |           |          | 'USD'::character varying
+ status              | character varying(20)       |           |          | 'pending'::character varying
+ card_last4          | character varying(4)        |           |          | 
+ card_brand          | character varying(20)       |           |          | 
+ metadata            | jsonb                       |           |          | 
+ error_message       | text                        |           |          | 
+ paid_at             | timestamp without time zone |           |          | 
+ created_at          | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ updated_at          | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "payments_pkey" PRIMARY KEY, btree (id)
+    "idx_payments_created_at" btree (created_at)
+    "idx_payments_order_id" btree (order_id)
+    "idx_payments_payment_provider_id" btree (payment_provider_id)
+    "idx_payments_status" btree (status)
+Check constraints:
+    "payments_amount_check" CHECK (amount >= 0::numeric)
+    "payments_payment_method_check" CHECK (payment_method::text = ANY (ARRAY['stripe'::character varying, 'paypal'::character varying, 'flutterwave'::character varying, 'bank_transfer'::character varying]::text[]))
+    "payments_status_check" CHECK (status::text = ANY (ARRAY['pending'::character varying, 'processing'::character varying, 'completed'::character varying, 'failed'::character varying, 'cancelled'::character varying]::text[]))
+Foreign-key constraints:
+    "payments_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+Referenced by:
+    TABLE "refunds" CONSTRAINT "refunds_payment_id_fkey" FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE
+Triggers:
+    update_payments_updated_at BEFORE UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+

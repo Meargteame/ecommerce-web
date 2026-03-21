@@ -1,0 +1,4 @@
+psql:scripts/seed.sql:364: NOTICE:  Admin: 54d07860-0a3c-4b8b-a3a8-ab4cba92997f
+psql:scripts/seed.sql:364: NOTICE:  Categories ready
+psql:scripts/seed.sql:364: NOTICE:  Seed complete!
+DO

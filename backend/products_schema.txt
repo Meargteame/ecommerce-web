@@ -1,0 +1,66 @@
+                                        Table "public.products"
+       Column        |            Type             | Collation | Nullable |          Default           
+---------------------+-----------------------------+-----------+----------+----------------------------
+ id                  | uuid                        |           | not null | uuid_generate_v4()
+ seller_id           | uuid                        |           | not null | 
+ category_id         | uuid                        |           |          | 
+ name                | character varying(255)      |           | not null | 
+ slug                | character varying(255)      |           | not null | 
+ description         | text                        |           |          | 
+ short_description   | character varying(500)      |           |          | 
+ sku                 | character varying(100)      |           | not null | 
+ price               | numeric(10,2)               |           | not null | 
+ compare_at_price    | numeric(10,2)               |           |          | 
+ cost_per_item       | numeric(10,2)               |           |          | 
+ stock_quantity      | integer                     |           |          | 0
+ low_stock_threshold | integer                     |           |          | 10
+ weight              | numeric(10,2)               |           |          | 
+ weight_unit         | character varying(10)       |           |          | 'kg'::character varying
+ brand               | character varying(100)      |           |          | 
+ condition           | character varying(20)       |           |          | 'new'::character varying
+ is_active           | boolean                     |           |          | true
+ is_featured         | boolean                     |           |          | false
+ average_rating      | numeric(3,2)                |           |          | 0
+ review_count        | integer                     |           |          | 0
+ view_count          | integer                     |           |          | 0
+ sold_count          | integer                     |           |          | 0
+ created_at          | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ updated_at          | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ base_price          | numeric(10,2)               |           |          | 
+ status              | character varying(20)       |           |          | 'draft'::character varying
+ specifications      | jsonb                       |           |          | '{}'::jsonb
+Indexes:
+    "products_pkey" PRIMARY KEY, btree (id)
+    "idx_products_average_rating" btree (average_rating)
+    "idx_products_category_id" btree (category_id)
+    "idx_products_created_at" btree (created_at)
+    "idx_products_is_active" btree (is_active)
+    "idx_products_is_featured" btree (is_featured)
+    "idx_products_price" btree (price)
+    "idx_products_seller_id" btree (seller_id)
+    "idx_products_sku" btree (sku)
+    "idx_products_slug" btree (slug)
+    "products_sku_key" UNIQUE CONSTRAINT, btree (sku)
+    "products_slug_key" UNIQUE CONSTRAINT, btree (slug)
+Check constraints:
+    "products_average_rating_check" CHECK (average_rating >= 0::numeric AND average_rating <= 5::numeric)
+    "products_compare_at_price_check" CHECK (compare_at_price >= 0::numeric)
+    "products_condition_check" CHECK (condition::text = ANY (ARRAY['new'::character varying, 'used'::character varying, 'refurbished'::character varying]::text[]))
+    "products_cost_per_item_check" CHECK (cost_per_item >= 0::numeric)
+    "products_price_check" CHECK (price >= 0::numeric)
+    "products_status_check" CHECK (status::text = ANY (ARRAY['draft'::character varying, 'published'::character varying, 'archived'::character varying]::text[]))
+    "products_stock_quantity_check" CHECK (stock_quantity >= 0)
+Foreign-key constraints:
+    "products_category_id_fkey" FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    "products_seller_id_fkey" FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
+Referenced by:
+    TABLE "cart_items" CONSTRAINT "cart_items_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    TABLE "order_items" CONSTRAINT "order_items_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+    TABLE "product_images" CONSTRAINT "product_images_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    TABLE "product_questions" CONSTRAINT "product_questions_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    TABLE "product_variants" CONSTRAINT "product_variants_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    TABLE "reviews" CONSTRAINT "reviews_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    TABLE "wishlists" CONSTRAINT "wishlists_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+Triggers:
+    update_products_updated_at BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+

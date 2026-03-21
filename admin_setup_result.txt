@@ -1,0 +1,5 @@
+Migrations OK
+Admin already exists: admin@shophub.com
+Email: admin@shophub.com
+Password: Admin@123456
+Login: http://localhost:3000

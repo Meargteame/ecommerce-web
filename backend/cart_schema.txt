@@ -1,0 +1,26 @@
+                                  Table "public.cart_items"
+       Column       |            Type             | Collation | Nullable |      Default       
+--------------------+-----------------------------+-----------+----------+--------------------
+ id                 | uuid                        |           | not null | uuid_generate_v4()
+ cart_id            | uuid                        |           | not null | 
+ product_id         | uuid                        |           | not null | 
+ product_variant_id | uuid                        |           |          | 
+ quantity           | integer                     |           | not null | 
+ is_saved_for_later | boolean                     |           |          | false
+ created_at         | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ updated_at         | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "cart_items_pkey" PRIMARY KEY, btree (id)
+    "cart_items_cart_id_product_id_product_variant_id_key" UNIQUE CONSTRAINT, btree (cart_id, product_id, product_variant_id)
+    "idx_cart_items_cart_id" btree (cart_id)
+    "idx_cart_items_is_saved_for_later" btree (is_saved_for_later)
+    "idx_cart_items_product_id" btree (product_id)
+Check constraints:
+    "cart_items_quantity_check" CHECK (quantity > 0)
+Foreign-key constraints:
+    "cart_items_cart_id_fkey" FOREIGN KEY (cart_id) REFERENCES carts(id) ON DELETE CASCADE
+    "cart_items_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    "cart_items_product_variant_id_fkey" FOREIGN KEY (product_variant_id) REFERENCES product_variants(id) ON DELETE CASCADE
+Triggers:
+    update_cart_items_updated_at BEFORE UPDATE ON cart_items FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+

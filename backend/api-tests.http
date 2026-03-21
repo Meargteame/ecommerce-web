@@ -1,0 +1,596 @@
+### E-Commerce API Tests
+### Use VS Code REST Client extension to run these tests
+### Set variables below with actual values after each request
+
+@baseUrl = http://localhost:5000
+@accessToken = YOUR_ACCESS_TOKEN_HERE
+@adminToken = YOUR_ADMIN_TOKEN_HERE
+@productId = YOUR_PRODUCT_ID_HERE
+@variantId = YOUR_VARIANT_ID_HERE
+@categoryId = YOUR_CATEGORY_ID_HERE
+@orderId = YOUR_ORDER_ID_HERE
+@trackingNumber = YOUR_TRACKING_NUMBER_HERE
+
+### ============================================
+### 1. HEALTH CHECK
+### ============================================
+
+### Check server health
+GET {{baseUrl}}/health
+
+### ============================================
+### 2. AUTHENTICATION
+### ============================================
+
+### Register new user
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "Test@1234",
+  "firstName": "John",
+  "lastName": "Doe",
+  "phone": "+1234567890"
+}
+
+### Login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "Test@1234"
+}
+
+### Get current user
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{accessToken}}
+
+### Refresh token
+POST {{baseUrl}}/api/auth/refresh-token
+Content-Type: application/json
+
+{
+  "refreshToken": "YOUR_REFRESH_TOKEN"
+}
+
+### ============================================
+### 3. CATEGORIES
+### ============================================
+
+### Get all categories
+GET {{baseUrl}}/api/categories
+
+### Create category (admin)
+POST {{baseUrl}}/api/categories
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Electronics",
+  "slug": "electronics",
+  "description": "Electronic devices and accessories"
+}
+
+### Get category by ID
+GET {{baseUrl}}/api/categories/{{categoryId}}
+
+### ============================================
+### 4. PRODUCTS
+### ============================================
+
+### Get all products
+GET {{baseUrl}}/api/products?limit=10&offset=0
+
+### Search products
+GET {{baseUrl}}/api/products/search?q=headphones
+
+### Get product by ID
+GET {{baseUrl}}/api/products/{{productId}}
+
+### Create product (admin)
+POST {{baseUrl}}/api/products
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Wireless Headphones",
+  "slug": "wireless-headphones",
+  "description": "High-quality wireless headphones with noise cancellation",
+  "basePrice": 99.99,
+  "categoryId": "{{categoryId}}",
+  "brand": "TechBrand",
+  "status": "published",
+  "specifications": {
+    "color": "Black",
+    "battery": "30 hours",
+    "connectivity": "Bluetooth 5.0"
+  }
+}
+
+### Update product (admin)
+PUT {{baseUrl}}/api/products/{{productId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "basePrice": 89.99,
+  "status": "published"
+}
+
+### Create product variant (admin)
+POST {{baseUrl}}/api/products/{{productId}}/variants
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "sku": "WH-BLK-001",
+  "variantName": "Black",
+  "attributes": {
+    "color": "Black"
+  },
+  "priceAdjustment": 0,
+  "stockQuantity": 100,
+  "weight": 250
+}
+
+### Get product variants
+GET {{baseUrl}}/api/products/{{productId}}/variants
+
+### ============================================
+### 5. USER PROFILE & ADDRESSES
+### ============================================
+
+### Get user profile
+GET {{baseUrl}}/api/users/profile
+Authorization: Bearer {{accessToken}}
+
+### Update profile
+PUT {{baseUrl}}/api/users/profile
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "firstName": "John",
+  "lastName": "Smith",
+  "phone": "+1234567890"
+}
+
+### Get addresses
+GET {{baseUrl}}/api/users/addresses
+Authorization: Bearer {{accessToken}}
+
+### Add address
+POST {{baseUrl}}/api/users/addresses
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "addressType": "shipping",
+  "fullName": "John Doe",
+  "addressLine1": "123 Main St",
+  "city": "New York",
+  "state": "NY",
+  "postalCode": "10001",
+  "country": "US",
+  "phone": "+1234567890",
+  "isDefault": true
+}
+
+### ============================================
+### 6. CART
+### ============================================
+
+### Get cart
+GET {{baseUrl}}/api/cart
+Authorization: Bearer {{accessToken}}
+
+### Add item to cart
+POST {{baseUrl}}/api/cart/items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "productId": "{{productId}}",
+  "variantId": "{{variantId}}",
+  "quantity": 2
+}
+
+### Update cart item
+PUT {{baseUrl}}/api/cart/items/CART_ITEM_ID
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "quantity": 3
+}
+
+### Remove cart item
+DELETE {{baseUrl}}/api/cart/items/CART_ITEM_ID
+Authorization: Bearer {{accessToken}}
+
+### Validate cart
+GET {{baseUrl}}/api/cart/validate
+Authorization: Bearer {{accessToken}}
+
+### Clear cart
+DELETE {{baseUrl}}/api/cart
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### 7. ORDERS
+### ============================================
+
+### Create order (checkout)
+POST {{baseUrl}}/api/orders
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "shippingAddress": {
+    "fullName": "John Doe",
+    "addressLine1": "123 Main St",
+    "city": "New York",
+    "state": "NY",
+    "postalCode": "10001",
+    "country": "US",
+    "phone": "+1234567890"
+  },
+  "billingAddress": {
+    "fullName": "John Doe",
+    "addressLine1": "123 Main St",
+    "city": "New York",
+    "state": "NY",
+    "postalCode": "10001",
+    "country": "US",
+    "phone": "+1234567890"
+  },
+  "customerEmail": "test@example.com",
+  "customerPhone": "+1234567890"
+}
+
+### Get order by ID
+GET {{baseUrl}}/api/orders/{{orderId}}
+Authorization: Bearer {{accessToken}}
+
+### Get user orders
+GET {{baseUrl}}/api/users/orders
+Authorization: Bearer {{accessToken}}
+
+### Update order status (admin)
+PUT {{baseUrl}}/api/orders/{{orderId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "processing",
+  "notes": "Order is being prepared"
+}
+
+### Cancel order
+POST {{baseUrl}}/api/orders/{{orderId}}/cancel
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### 8. PAYMENTS
+### ============================================
+
+### Process payment
+POST {{baseUrl}}/api/payments/process
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "orderId": "{{orderId}}",
+  "paymentMethod": "credit_card",
+  "paymentGateway": "stripe",
+  "paymentDetails": {
+    "cardNumber": "4242424242424242",
+    "expiryMonth": "12",
+    "expiryYear": "2025",
+    "cvv": "123"
+  }
+}
+
+### Get payment by order ID
+GET {{baseUrl}}/api/payments/order/{{orderId}}
+Authorization: Bearer {{accessToken}}
+
+### Process refund (admin)
+POST {{baseUrl}}/api/payments/PAYMENT_ID/refund
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "amount": 50.00,
+  "reason": "Customer requested refund"
+}
+
+### ============================================
+### 9. SHIPPING
+### ============================================
+
+### Calculate shipping
+POST {{baseUrl}}/api/shipping/calculate
+Content-Type: application/json
+
+{
+  "address": {
+    "country": "US",
+    "state": "NY",
+    "city": "New York",
+    "postalCode": "10001"
+  },
+  "items": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 2,
+      "weight": 0.5
+    }
+  ]
+}
+
+### Get supported couriers
+GET {{baseUrl}}/api/shipping/couriers
+
+### Create shipment (admin)
+POST {{baseUrl}}/api/shipping/shipments
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "orderId": "{{orderId}}",
+  "courier": "dhl",
+  "weight": 1.5,
+  "weightUnit": "kg",
+  "notes": "Handle with care"
+}
+
+### Track shipment
+GET {{baseUrl}}/api/shipping/track/{{trackingNumber}}
+
+### Get shipment by order ID
+GET {{baseUrl}}/api/shipping/order/{{orderId}}
+Authorization: Bearer {{accessToken}}
+
+### Update shipment status (admin)
+PATCH {{baseUrl}}/api/shipping/shipments/{{trackingNumber}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "delivered",
+  "notes": "Package delivered successfully"
+}
+
+### ============================================
+### 10. REVIEWS
+### ============================================
+
+### Create review
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "productId": "{{productId}}",
+  "orderId": "{{orderId}}",
+  "rating": 5,
+  "title": "Excellent product!",
+  "comment": "These headphones are amazing. Great sound quality and battery life."
+}
+
+### Get product reviews
+GET {{baseUrl}}/api/reviews/product/{{productId}}?limit=10&offset=0
+
+### Get review by ID
+GET {{baseUrl}}/api/reviews/REVIEW_ID
+
+### Update review
+PUT {{baseUrl}}/api/reviews/REVIEW_ID
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "rating": 4,
+  "title": "Good product",
+  "comment": "Updated review after more use"
+}
+
+### Delete review
+DELETE {{baseUrl}}/api/reviews/REVIEW_ID
+Authorization: Bearer {{accessToken}}
+
+### Mark review helpful
+POST {{baseUrl}}/api/reviews/REVIEW_ID/helpful
+
+### Create product question
+POST {{baseUrl}}/api/reviews/questions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "productId": "{{productId}}",
+  "question": "Is this compatible with iPhone?"
+}
+
+### Get product questions
+GET {{baseUrl}}/api/reviews/questions/product/{{productId}}?limit=10&offset=0
+
+### Create answer
+POST {{baseUrl}}/api/reviews/answers
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "questionId": "QUESTION_ID",
+  "answer": "Yes, it works with all Bluetooth devices including iPhone.",
+  "isSeller": false
+}
+
+### ============================================
+### 11. PROMOTIONS
+### ============================================
+
+### Get active promotions
+GET {{baseUrl}}/api/promotions/active
+
+### Create promotion (admin)
+POST {{baseUrl}}/api/promotions
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "code": "SAVE20",
+  "name": "20% Off Spring Sale",
+  "description": "Get 20% off on all products",
+  "discountType": "percentage",
+  "discountValue": 20,
+  "minPurchaseAmount": 50,
+  "maxDiscountAmount": 100,
+  "usageLimit": 1000,
+  "perUserLimit": 1,
+  "startDate": "2026-03-01T00:00:00Z",
+  "endDate": "2026-04-01T00:00:00Z"
+}
+
+### Get all promotions (admin)
+GET {{baseUrl}}/api/promotions
+Authorization: Bearer {{adminToken}}
+
+### Validate coupon
+POST {{baseUrl}}/api/promotions/validate
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "code": "SAVE20",
+  "cartTotal": 100
+}
+
+### Apply coupon
+POST {{baseUrl}}/api/promotions/apply
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "code": "SAVE20",
+  "cartTotal": 100
+}
+
+### Update promotion (admin)
+PUT {{baseUrl}}/api/promotions/PROMOTION_ID
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "discountValue": 25,
+  "isActive": true
+}
+
+### Delete promotion (admin)
+DELETE {{baseUrl}}/api/promotions/PROMOTION_ID
+Authorization: Bearer {{adminToken}}
+
+### ============================================
+### 12. ANALYTICS
+### ============================================
+
+### Track event
+POST {{baseUrl}}/api/analytics/events
+Content-Type: application/json
+
+{
+  "eventType": "product_view",
+  "sessionId": "session-123",
+  "eventData": {
+    "productId": "{{productId}}",
+    "productName": "Wireless Headphones"
+  }
+}
+
+### Get dashboard metrics (admin)
+GET {{baseUrl}}/api/analytics/dashboard?startDate=2026-03-01&endDate=2026-03-31
+Authorization: Bearer {{adminToken}}
+
+### Get sales metrics (admin)
+GET {{baseUrl}}/api/analytics/sales?startDate=2026-03-01&endDate=2026-03-31
+Authorization: Bearer {{adminToken}}
+
+### Get conversion metrics (admin)
+GET {{baseUrl}}/api/analytics/conversions?startDate=2026-03-01&endDate=2026-03-31
+Authorization: Bearer {{adminToken}}
+
+### Get customer metrics (admin)
+GET {{baseUrl}}/api/analytics/customers?startDate=2026-03-01&endDate=2026-03-31
+Authorization: Bearer {{adminToken}}
+
+### Get product metrics (admin)
+GET {{baseUrl}}/api/analytics/products/{{productId}}?startDate=2026-03-01&endDate=2026-03-31
+Authorization: Bearer {{adminToken}}
+
+### Get traffic sources (admin)
+GET {{baseUrl}}/api/analytics/traffic?startDate=2026-03-01&endDate=2026-03-31
+Authorization: Bearer {{adminToken}}
+
+### ============================================
+### 13. NOTIFICATIONS (Admin Testing)
+### ============================================
+
+### Send test email (admin)
+POST {{baseUrl}}/api/notifications/test
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "to": "test@example.com",
+  "subject": "Test Email",
+  "message": "This is a test email from the API"
+}
+
+### Resend order confirmation
+POST {{baseUrl}}/api/notifications/order-confirmation/{{orderId}}
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### 14. INVENTORY (Admin)
+### ============================================
+
+### Get inventory status (admin)
+GET {{baseUrl}}/api/inventory/status
+Authorization: Bearer {{adminToken}}
+
+### Update stock (admin)
+PUT {{baseUrl}}/api/inventory/SKU_HERE
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "quantity": 150
+}
+
+### Get low stock items (admin)
+GET {{baseUrl}}/api/inventory/low-stock?threshold=20
+Authorization: Bearer {{adminToken}}
+
+### ============================================
+### 15. WISHLIST
+### ============================================
+
+### Get wishlist
+GET {{baseUrl}}/api/users/wishlist
+Authorization: Bearer {{accessToken}}
+
+### Add to wishlist
+POST {{baseUrl}}/api/users/wishlist
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "productId": "{{productId}}"
+}
+
+### Remove from wishlist
+DELETE {{baseUrl}}/api/users/wishlist/WISHLIST_ITEM_ID
+Authorization: Bearer {{accessToken}}

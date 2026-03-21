@@ -1,0 +1,9 @@
+REGISTER: {"message":"User registered successfully","data":{"user":{"id":"9e9841bd-1897-4db0-a6f9-3d8e6c3bc504","email":"debug_1773442515@test.com","firstName":"Debug","lastName":"Test","phone":null,"emailVerified":false,"accountStatus":"active","role":"customer","createdAt":"2026-03-13T22:55:15.932Z","updatedAt":"2026-03-13T22:55:15.932Z"},"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5ZTk4NDFiZC0xODk3LTRkYjAtYTZmOS0zZDhlNmMzYmM1MDQiLCJlbWFpbCI6ImRlYnVnXzE3NzM0NDI1MTVAdGVzdC5jb20iLCJyb2xlIjoiY3VzdG9tZXIiLCJpYXQiOjE3NzM0NDI1MTUsImV4cCI6MTc3MzQ0MzQxNX0.PGwjqHwcpbLCszW-giTb6TyukMedPX7IyoWf-9unpD4","refreshToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5ZTk4NDFiZC0xODk3LTRkYjAtYTZmOS0zZDhlNmMzYmM1MDQiLCJlbWFpbCI6ImRlYnVnXzE3NzM0NDI1MTVAdGVzdC5jb20iLCJyb2xlIjoiY3VzdG9tZXIiLCJpYXQiOjE3NzM0NDI1MTUsImV4cCI6MTc3NDA0NzMxNX0.ASAvn7r3nWVUj5ZTMpQ_gGtnkPdxtVPHnvvokjHPj5c"}}
+TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6Ik
+USER_ID: 9e9841bd-1897-4db0-a6f9-3d8e6c3bc504
+UPDATE 1
+ADMIN_TOKEN: eyJhbGciOiJIUzI1NiIsInR5cCI6Ik
+CATEGORY: {"message":"Category created successfully","data":{"id":"8f352120-4e69-4435-a7e2-0181b22b784d","name":"TestCat_1773442515","slug":"testcat-1773442515","description":"Test","parentId":null,"imageUrl":null,"displayOrder":0,"createdAt":"2026-03-13T22:55:16.187Z","updatedAt":"2026-03-13T22:55:16.187Z"}}
+CAT_ID: 8f352120-4e69-4435-a7e2-0181b22b784d
+PRODUCT: {"message":"Product created successfully","data":{"id":"312dd683-9539-44bd-9c64-c4463b0f0f4c","name":"TestProd_1773442515","slug":"testprod-1773442515","description":"Test","specifications":{},"basePrice":99.99,"categoryId":"8f352120-4e69-4435-a7e2-0181b22b784d","brand":"TestBrand","status":"published","averageRating":0,"reviewCount":0,"viewCount":0,"createdAt":"2026-03-13T22:55:16.257Z","updatedAt":"2026-03-13T22:55:16.257Z"}}
+PROD_ID: 312dd683-9539-44bd-9c64-c4463b0f0f4c

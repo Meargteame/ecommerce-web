@@ -1,0 +1,577 @@
+
+> ecommerce-frontend@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 5.1s
+ ○ Compiling / ...
+ ✓ Compiled / in 7.6s (915 modules)
+ ✓ Compiled in 796ms (393 modules)
+ GET / 200 in 8526ms
+ ○ Compiling /account/profile ...
+ ✓ Compiled /account/profile in 1955ms (925 modules)
+ GET /account/profile 200 in 2566ms
+ ✓ Compiled in 2.6s (926 modules)
+[TypeError: fetch failed] {
+  [cause]: AggregateError [ETIMEDOUT]: 
+      at internalConnectMultiple (node:net:1193:18)
+      at internalConnectMultiple (node:net:1269:5)
+      at Timeout.internalConnectMultipleTimeout (node:net:1810:5)
+      at listOnTimeout (node:internal/timers:607:11)
+      at process.processTimers (node:internal/timers:541:7) {
+    code: 'ETIMEDOUT',
+    [errors]: [
+      [Error], [Error],
+      [Error], [Error],
+      [Error], [Error],
+      [Error], [Error]
+    ]
+  }
+}
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 2.7s (1138 modules)
+ GET /_next/image?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-1483985988355-763728e1935b%3Fw%3D500%26q%3D75&w=1080&q=75 500 in 5424ms
+ GET /_next/image?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-1483985988355-763728e1935b%3Fw%3D500%26q%3D75&w=1080&q=75 500 in 3062ms
+ ✓ Compiled in 3s (1152 modules)
+ ✓ Compiled in 1842ms (1150 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 200 in 529ms
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 789ms (593 modules)
+ GET /favicon.ico 200 in 894ms
+[TypeError: fetch failed] {
+  [cause]: AggregateError [ETIMEDOUT]: 
+      at internalConnectMultiple (node:net:1193:18)
+      at internalConnectMultiple (node:net:1269:5)
+      at Timeout.internalConnectMultipleTimeout (node:net:1810:5)
+      at listOnTimeout (node:internal/timers:607:11)
+      at process.processTimers (node:internal/timers:541:7) {
+    code: 'ETIMEDOUT',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+ ✓ Compiled /_error in 405ms (1170 modules)
+ GET /_next/image?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-1483985988355-763728e1935b%3Fw%3D500%26q%3D75&w=1080&q=75 500 in 2502ms
+ GET /_next/image?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-1483985988355-763728e1935b%3Fw%3D500%26q%3D75&w=1080&q=75 500 in 588ms
+ ✓ Compiled in 1039ms (1184 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ components/layout/Header.tsx (194:20) @ ShoppingBag
+ ⨯ ReferenceError: ShoppingBag is not defined
+    at Header (./components/layout/Header.tsx:365:135)
+digest: "1748523273"
+[0m [90m 192 |[39m               [33m<[39m[33mLink[39m href[33m=[39m[32m"/"[39m className[33m=[39m[32m"flex items-center gap-2 group shrink-0"[39m[33m>[39m[0m
+[0m [90m 193 |[39m                 [33m<[39m[33mdiv[39m className[33m=[39m[32m"w-9 h-9 premium-gradient rounded-xl flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-110 transition-all duration-300"[39m[33m>[39m[0m
+[0m[31m[1m>[22m[39m[90m 194 |[39m                   [33m<[39m[33mShoppingBag[39m className[33m=[39m[32m"text-white h-5 w-5"[39m [33m/[39m[33m>[39m[0m
+[0m [90m     |[39m                    [31m[1m^[22m[39m[0m
+[0m [90m 195 |[39m                 [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 196 |[39m                 [33m<[39m[33mdiv[39m className[33m=[39m[32m"flex flex-col"[39m[33m>[39m[0m
+[0m [90m 197 |[39m                   [33m<[39m[33mspan[39m className[33m=[39m[32m"font-bold text-gray-900 text-xl tracking-tight leading-none"[39m[33m>[39m[33mShopHub[39m[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[0m
+ GET / 500 in 327ms
+ GET /favicon.ico 200 in 37ms
+ ✓ Compiled in 1428ms (1182 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ components/layout/Header.tsx (218:28) @ search
+ ⨯ ReferenceError: search is not defined
+    at Header (./components/layout/Header.tsx:467:60)
+digest: "2922920701"
+[0m [90m 216 |[39m                   [33m<[39m[33minput[39m[0m
+[0m [90m 217 |[39m                     type[33m=[39m[32m"text"[39m[0m
+[0m[31m[1m>[22m[39m[90m 218 |[39m                     value[33m=[39m{search}[0m
+[0m [90m     |[39m                            [31m[1m^[22m[39m[0m
+[0m [90m 219 |[39m                     onChange[33m=[39m{(e) [33m=>[39m setSearch(e[33m.[39mtarget[33m.[39mvalue)}[0m
+[0m [90m 220 |[39m                     placeholder[33m=[39m[32m"Search for products, brands and more"[39m[0m
+[0m [90m 221 |[39m                     className[33m=[39m[32m"flex-1 h-full px-5 bg-transparent text-sm text-gray-900 placeholder-gray-400 focus:outline-none"[39m[0m
+ ⨯ components/layout/Header.tsx (218:28) @ search
+ ⨯ ReferenceError: search is not defined
+    at Header (./components/layout/Header.tsx:467:60)
+digest: "2922920701"
+[0m [90m 216 |[39m                   [33m<[39m[33minput[39m[0m
+[0m [90m 217 |[39m                     type[33m=[39m[32m"text"[39m[0m
+[0m[31m[1m>[22m[39m[90m 218 |[39m                     value[33m=[39m{search}[0m
+[0m [90m     |[39m                            [31m[1m^[22m[39m[0m
+[0m [90m 219 |[39m                     onChange[33m=[39m{(e) [33m=>[39m setSearch(e[33m.[39mtarget[33m.[39mvalue)}[0m
+[0m [90m 220 |[39m                     placeholder[33m=[39m[32m"Search for products, brands and more"[39m[0m
+[0m [90m 221 |[39m                     className[33m=[39m[32m"flex-1 h-full px-5 bg-transparent text-sm text-gray-900 placeholder-gray-400 focus:outline-none"[39m[0m
+ GET / 500 in 291ms
+ GET /favicon.ico 200 in 25ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ✓ Compiled in 1288ms (1150 modules)
+ GET / 200 in 365ms
+ ✓ Compiled /favicon.ico in 333ms (593 modules)
+ GET /favicon.ico 200 in 620ms
+ ⨯ ./components/home/HeroSection.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/HeroSection.tsx[0m:168:1]
+ [2m168[0m |     </section>
+ [2m169[0m |   )
+ [2m170[0m | }
+ [2m171[0m |   )
+     : [31;1m  ^[0m
+ [2m172[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/HeroSection.tsx
+./app/page.tsx
+ ⨯ ./components/home/HeroSection.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/HeroSection.tsx[0m:168:1]
+ [2m168[0m |     </section>
+ [2m169[0m |   )
+ [2m170[0m | }
+ [2m171[0m |   )
+     : [31;1m  ^[0m
+ [2m172[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/HeroSection.tsx
+./app/page.tsx
+ ○ Compiling /_error ...
+ GET / 500 in 20ms
+ ⨯ ./components/home/HeroSection.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/HeroSection.tsx[0m:167:1]
+ [2m167[0m |       </div>
+ [2m168[0m |     </section>
+ [2m169[0m |   )
+ [2m170[0m |   )
+     : [31;1m  ^[0m
+ [2m171[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/HeroSection.tsx
+./app/page.tsx
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 500 in 1532ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 500 in 55ms
+ GET / 500 in 38ms
+ ⨯ ./components/home/HeroSection.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/HeroSection.tsx[0m:167:1]
+ [2m167[0m |       </div>
+ [2m168[0m |     </section>
+ [2m169[0m |   )
+ [2m170[0m |   )
+     : [31;1m  ^[0m
+ [2m171[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/HeroSection.tsx
+./app/page.tsx
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 500 in 1233ms
+ GET /favicon.ico 500 in 1346ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 500 in 24ms
+ GET /favicon.ico 500 in 23ms
+ ⨯ ./components/home/HeroSection.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/HeroSection.tsx[0m:167:1]
+ [2m167[0m |       </div>
+ [2m168[0m |     </section>
+ [2m169[0m |   )
+ [2m170[0m |   )
+     : [31;1m  ^[0m
+ [2m171[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/HeroSection.tsx
+./app/page.tsx
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 500 in 1688ms
+ GET / 500 in 36ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /favicon.ico 500 in 20ms
+ ⨯ ./components/home/HeroSection.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/HeroSection.tsx[0m:167:1]
+ [2m167[0m |       </div>
+ [2m168[0m |     </section>
+ [2m169[0m |   )
+ [2m170[0m |   )
+     : [31;1m  ^[0m
+ [2m171[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/HeroSection.tsx
+./app/page.tsx
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 500 in 1472ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 500 in 56ms
+ GET / 500 in 46ms
+ GET /favicon.ico 500 in 31ms
+ ✓ Compiled /favicon.ico in 453ms (584 modules)
+ GET / 500 in 54ms
+ GET /favicon.ico 500 in 41ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 4.4s (1174 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 200 in 155ms
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 404 in 4679ms
+ GET / 200 in 207ms
+ GET /favicon.ico 200 in 44ms
+ ✓ Compiled in 5.9s (1153 modules)
+[TypeError: fetch failed] {
+  [cause]: AggregateError [ETIMEDOUT]: 
+      at internalConnectMultiple (node:net:1193:18)
+      at internalConnectMultiple (node:net:1269:5)
+      at Timeout.internalConnectMultipleTimeout (node:net:1810:5)
+      at listOnTimeout (node:internal/timers:607:11)
+      at process.processTimers (node:internal/timers:541:7) {
+    code: 'ETIMEDOUT',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+ GET /_next/image?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-1555041469-a586c61ea9bc%3Fw%3D900%26q%3D80&w=1920&q=75 500 in 939ms
+ GET /_next/image?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-1555041469-a586c61ea9bc%3Fw%3D900%26q%3D80&w=1920&q=75 500 in 92ms
+ GET / 200 in 685ms
+ ○ Compiling /wishlist ...
+ ✓ Compiled /wishlist in 1482ms (1153 modules)
+ GET /wishlist 200 in 75ms
+ ⨯ ./components/home/FeaturedProducts.tsx
+Error: 
+  [31mx[0m Return statement is not allowed here
+    ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/FeaturedProducts.tsx[0m:27:1]
+ [2m27[0m |       )
+ [2m28[0m |     }
+ [2m29[0m |     
+ [2m30[0m | [31;1m,[0m[31;1m-[0m[31;1m>[0m   return (
+ [2m31[0m | [31;1m|[0m       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+ [2m32[0m | [31;1m|[0m         <div className="flex items-end justify-between mb-8">
+ [2m33[0m | [31;1m|[0m           <div>
+ [2m34[0m | [31;1m|[0m             <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight leading-none mb-2">
+ [2m35[0m | [31;1m|[0m               Featured <span className="text-gradient">Products</span>
+ [2m36[0m | [31;1m|[0m             </h2>
+ [2m37[0m | [31;1m|[0m             <p className="text-sm text-gray-500 font-medium">Handpicked premium products just for you</p>
+ [2m38[0m | [31;1m|[0m           </div>
+ [2m39[0m | [31;1m|[0m           <Link href="/products" className="text-sm font-bold text-primary hover:text-primary/80 transition-all flex items-center gap-1">
+ [2m40[0m | [31;1m|[0m             Explore all <ArrowRight className="h-4 w-4" />
+ [2m41[0m | [31;1m|[0m           </Link>
+ [2m42[0m | [31;1m|[0m         </div>
+ [2m43[0m | [31;1m|[0m   
+ [2m44[0m | [31;1m|[0m         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+ [2m45[0m | [31;1m|[0m           {loading
+ [2m46[0m | [31;1m|[0m             ? Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} />)
+ [2m47[0m | [31;1m|[0m             : products.length > 0
+ [2m48[0m | [31;1m|[0m               ? products.map((p) => <ProductCard key={p.id} product={p as any} />)
+ [2m49[0m | [31;1m|[0m               : (
+ [2m50[0m | [31;1m|[0m                 <div className="col-span-full glass rounded-[2.5rem] p-16 text-center">
+ [2m51[0m | [31;1m|[0m                   <p className="text-gray-500 font-medium mb-4">No products found in this collection.</p>
+ [2m52[0m | [31;1m|[0m                   <Link href="/sell" className="inline-flex py-3 px-8 premium-gradient text-white rounded-2xl font-bold text-sm">
+ [2m53[0m | [31;1m|[0m                     Start Selling
+ [2m54[0m | [31;1m|[0m                   </Link>
+ [2m55[0m | [31;1m|[0m                 </div>
+ [2m56[0m | [31;1m|[0m               )
+ [2m57[0m | [31;1m|[0m           }
+ [2m58[0m | [31;1m|[0m         </div>
+ [2m59[0m | [31;1m|[0m       </section>
+ [2m60[0m | [31;1m`[0m[31;1m-[0m[31;1m>[0m   )
+ [2m61[0m |     }
+    `----
+
+  [31mx[0m Expression expected
+    ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/FeaturedProducts.tsx[0m:58:1]
+ [2m58[0m |       </div>
+ [2m59[0m |     </section>
+ [2m60[0m |   )
+ [2m61[0m | }
+    : [31;1m^[0m
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/FeaturedProducts.tsx
+./app/page.tsx
+ GET / 500 in 56ms
+ GET / 500 in 84ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 4.4s (1147 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 404 in 4750ms
+ ⨯ components/home/FeaturedProducts.tsx (59:24) @ ArrowRight
+ ⨯ ReferenceError: ArrowRight is not defined
+    at FeaturedProducts (./components/home/FeaturedProducts.tsx:150:105)
+digest: "1416714684"
+[0m [90m 57 |[39m         [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 58 |[39m         [33m<[39m[33mLink[39m href[33m=[39m[32m"/products"[39m className[33m=[39m[32m"text-sm font-bold text-primary hover:text-primary/80 transition-all flex items-center gap-1"[39m[33m>[39m[0m
+[0m[31m[1m>[22m[39m[90m 59 |[39m           [33mExplore[39m all [33m<[39m[33mArrowRight[39m className[33m=[39m[32m"h-4 w-4"[39m [33m/[39m[33m>[39m[0m
+[0m [90m    |[39m                        [31m[1m^[22m[39m[0m
+[0m [90m 60 |[39m         [33m<[39m[33m/[39m[33mLink[39m[33m>[39m[0m
+[0m [90m 61 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 62 |[39m[0m
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 500 in 380ms
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 404 in 185ms
+ ⨯ components/home/FeaturedProducts.tsx (59:24) @ ArrowRight
+ ⨯ ReferenceError: ArrowRight is not defined
+    at FeaturedProducts (./components/home/FeaturedProducts.tsx:150:105)
+digest: "1416714684"
+[0m [90m 57 |[39m         [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 58 |[39m         [33m<[39m[33mLink[39m href[33m=[39m[32m"/products"[39m className[33m=[39m[32m"text-sm font-bold text-primary hover:text-primary/80 transition-all flex items-center gap-1"[39m[33m>[39m[0m
+[0m[31m[1m>[22m[39m[90m 59 |[39m           [33mExplore[39m all [33m<[39m[33mArrowRight[39m className[33m=[39m[32m"h-4 w-4"[39m [33m/[39m[33m>[39m[0m
+[0m [90m    |[39m                        [31m[1m^[22m[39m[0m
+[0m [90m 60 |[39m         [33m<[39m[33m/[39m[33mLink[39m[33m>[39m[0m
+[0m [90m 61 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 62 |[39m[0m
+ ⨯ components/home/FeaturedProducts.tsx (59:24) @ ArrowRight
+ ⨯ ReferenceError: ArrowRight is not defined
+    at FeaturedProducts (./components/home/FeaturedProducts.tsx:150:105)
+digest: "1416714684"
+[0m [90m 57 |[39m         [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 58 |[39m         [33m<[39m[33mLink[39m href[33m=[39m[32m"/products"[39m className[33m=[39m[32m"text-sm font-bold text-primary hover:text-primary/80 transition-all flex items-center gap-1"[39m[33m>[39m[0m
+[0m[31m[1m>[22m[39m[90m 59 |[39m           [33mExplore[39m all [33m<[39m[33mArrowRight[39m className[33m=[39m[32m"h-4 w-4"[39m [33m/[39m[33m>[39m[0m
+[0m [90m    |[39m                        [31m[1m^[22m[39m[0m
+[0m [90m 60 |[39m         [33m<[39m[33m/[39m[33mLink[39m[33m>[39m[0m
+[0m [90m 61 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 62 |[39m[0m
+ GET / 500 in 190ms
+ GET / 500 in 120ms
+ ✓ Compiled /favicon.ico in 461ms (597 modules)
+ GET /favicon.ico 200 in 658ms
+ GET /favicon.ico 200 in 19ms
+ ✓ Compiled in 1749ms (1195 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 200 in 106ms
+ ⨯ components/home/FeaturedProducts.tsx (59:20) @ split
+ ⨯ TypeError: Cannot read properties of undefined (reading 'split')
+    at ProductCarousel (./components/home/FeaturedProducts.tsx:123:43)
+digest: "753233643"
+[0m [90m 57 |[39m         [33m<[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 58 |[39m           [33m<[39m[33mh2[39m className[33m=[39m[32m"text-3xl font-extrabold text-gray-900 tracking-tight leading-none mb-2"[39m[33m>[39m[0m
+[0m[31m[1m>[22m[39m[90m 59 |[39m             {title[33m.[39msplit([32m' '[39m)[[35m0[39m]} [33m<[39m[33mspan[39m className[33m=[39m[32m"text-gradient"[39m[33m>[39m{title[33m.[39msplit([32m' '[39m)[33m.[39mslice([35m1[39m)[33m.[39mjoin([32m' '[39m)}[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[0m
+[0m [90m    |[39m                    [31m[1m^[22m[39m[0m
+[0m [90m 60 |[39m           [33m<[39m[33m/[39m[33mh2[39m[33m>[39m[0m
+[0m [90m 61 |[39m           [33m<[39m[33mp[39m className[33m=[39m[32m"text-sm text-gray-500 font-medium"[39m[33m>[39m[33mDiscover[39m our collection [36mof[39m {title[33m.[39mtoLowerCase()}[33m<[39m[33m/[39m[33mp[39m[33m>[39m[0m
+[0m [90m 62 |[39m         [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ components/home/FeaturedProducts.tsx (59:20) @ split
+ ⨯ TypeError: Cannot read properties of undefined (reading 'split')
+    at ProductCarousel (./components/home/FeaturedProducts.tsx:123:43)
+digest: "753233643"
+[0m [90m 57 |[39m         [33m<[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 58 |[39m           [33m<[39m[33mh2[39m className[33m=[39m[32m"text-3xl font-extrabold text-gray-900 tracking-tight leading-none mb-2"[39m[33m>[39m[0m
+[0m[31m[1m>[22m[39m[90m 59 |[39m             {title[33m.[39msplit([32m' '[39m)[[35m0[39m]} [33m<[39m[33mspan[39m className[33m=[39m[32m"text-gradient"[39m[33m>[39m{title[33m.[39msplit([32m' '[39m)[33m.[39mslice([35m1[39m)[33m.[39mjoin([32m' '[39m)}[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[0m
+[0m [90m    |[39m                    [31m[1m^[22m[39m[0m
+[0m [90m 60 |[39m           [33m<[39m[33m/[39m[33mh2[39m[33m>[39m[0m
+[0m [90m 61 |[39m           [33m<[39m[33mp[39m className[33m=[39m[32m"text-sm text-gray-500 font-medium"[39m[33m>[39m[33mDiscover[39m our collection [36mof[39m {title[33m.[39mtoLowerCase()}[33m<[39m[33m/[39m[33mp[39m[33m>[39m[0m
+[0m [90m 62 |[39m         [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+ ⨯ components/home/FeaturedProducts.tsx (59:20) @ split
+ ⨯ TypeError: Cannot read properties of undefined (reading 'split')
+    at ProductCarousel (./components/home/FeaturedProducts.tsx:123:43)
+digest: "753233643"
+[0m [90m 57 |[39m         [33m<[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 58 |[39m           [33m<[39m[33mh2[39m className[33m=[39m[32m"text-3xl font-extrabold text-gray-900 tracking-tight leading-none mb-2"[39m[33m>[39m[0m
+[0m[31m[1m>[22m[39m[90m 59 |[39m             {title[33m.[39msplit([32m' '[39m)[[35m0[39m]} [33m<[39m[33mspan[39m className[33m=[39m[32m"text-gradient"[39m[33m>[39m{title[33m.[39msplit([32m' '[39m)[33m.[39mslice([35m1[39m)[33m.[39mjoin([32m' '[39m)}[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[0m
+[0m [90m    |[39m                    [31m[1m^[22m[39m[0m
+[0m [90m 60 |[39m           [33m<[39m[33m/[39m[33mh2[39m[33m>[39m[0m
+[0m [90m 61 |[39m           [33m<[39m[33mp[39m className[33m=[39m[32m"text-sm text-gray-500 font-medium"[39m[33m>[39m[33mDiscover[39m our collection [36mof[39m {title[33m.[39mtoLowerCase()}[33m<[39m[33m/[39m[33mp[39m[33m>[39m[0m
+[0m [90m 62 |[39m         [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+ ⨯ components/home/FeaturedProducts.tsx (59:20) @ split
+ ⨯ TypeError: Cannot read properties of undefined (reading 'split')
+    at ProductCarousel (./components/home/FeaturedProducts.tsx:123:43)
+digest: "753233643"
+[0m [90m 57 |[39m         [33m<[39m[33mdiv[39m[33m>[39m[0m
+[0m [90m 58 |[39m           [33m<[39m[33mh2[39m className[33m=[39m[32m"text-3xl font-extrabold text-gray-900 tracking-tight leading-none mb-2"[39m[33m>[39m[0m
+[0m[31m[1m>[22m[39m[90m 59 |[39m             {title[33m.[39msplit([32m' '[39m)[[35m0[39m]} [33m<[39m[33mspan[39m className[33m=[39m[32m"text-gradient"[39m[33m>[39m{title[33m.[39msplit([32m' '[39m)[33m.[39mslice([35m1[39m)[33m.[39mjoin([32m' '[39m)}[33m<[39m[33m/[39m[33mspan[39m[33m>[39m[0m
+[0m [90m    |[39m                    [31m[1m^[22m[39m[0m
+[0m [90m 60 |[39m           [33m<[39m[33m/[39m[33mh2[39m[33m>[39m[0m
+[0m [90m 61 |[39m           [33m<[39m[33mp[39m className[33m=[39m[32m"text-sm text-gray-500 font-medium"[39m[33m>[39m[33mDiscover[39m our collection [36mof[39m {title[33m.[39mtoLowerCase()}[33m<[39m[33m/[39m[33mp[39m[33m>[39m[0m
+[0m [90m 62 |[39m         [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+ GET / 500 in 328ms
+ GET / 500 in 121ms
+ GET /favicon.ico 200 in 332ms
+ GET /favicon.ico 200 in 12ms
+ ✓ Compiled in 1278ms (1160 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 200 in 628ms
+ GET / 200 in 164ms
+ ✓ Compiled /favicon.ico in 256ms (597 modules)
+ GET /favicon.ico 200 in 407ms
+ GET /favicon.ico 200 in 26ms
+ ✓ Compiled in 1680ms (1158 modules)
+ ⨯ ./components/home/OnSaleSection.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/OnSaleSection.tsx[0m:292:1]
+ [2m292[0m |     </section>
+ [2m293[0m |   )
+ [2m294[0m | }
+ [2m295[0m |   )
+     : [31;1m  ^[0m
+ [2m296[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/OnSaleSection.tsx
+./app/page.tsx
+ GET / 500 in 23ms
+ GET / 500 in 36ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 4.8s (1147 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 404 in 5105ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 200 in 127ms
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 404 in 227ms
+ GET / 200 in 277ms
+ GET / 200 in 187ms
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 1141ms (597 modules)
+ GET /favicon.ico 200 in 1250ms
+ GET /favicon.ico 200 in 10ms
+ ✓ Compiled in 1981ms (1158 modules)
+ ⨯ ./components/home/PromoBanner.tsx
+Error: 
+  [31mx[0m Expression expected
+    ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/PromoBanner.tsx[0m:70:1]
+ [2m70[0m |     </section>
+ [2m71[0m |   )
+ [2m72[0m | }
+ [2m73[0m |     </section>
+    : [31;1m     ^[0m
+ [2m74[0m |   )
+ [2m75[0m | }
+    `----
+
+  [31mx[0m Expression expected
+    ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/PromoBanner.tsx[0m:71:1]
+ [2m71[0m |   )
+ [2m72[0m | }
+ [2m73[0m |     </section>
+ [2m74[0m |   )
+    : [31;1m  ^[0m
+ [2m75[0m | }
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/PromoBanner.tsx
+./app/page.tsx
+ GET / 500 in 40ms
+ GET / 500 in 29ms
+ ○ Compiling /_not-found ...
+ ⨯ ./components/home/PromoBanner.tsx
+Error: 
+  [31mx[0m Expression expected
+    ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/PromoBanner.tsx[0m:70:1]
+ [2m70[0m |     </section>
+ [2m71[0m |   )
+ [2m72[0m | }
+ [2m73[0m |     </section>
+    : [31;1m     ^[0m
+ [2m74[0m |   )
+ [2m75[0m | }
+    `----
+
+  [31mx[0m Expression expected
+    ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/PromoBanner.tsx[0m:71:1]
+ [2m71[0m |   )
+ [2m72[0m | }
+ [2m73[0m |     </section>
+ [2m74[0m |   )
+    : [31;1m  ^[0m
+ [2m75[0m | }
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/PromoBanner.tsx
+./app/page.tsx
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 500 in 2398ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 500 in 31ms
+ GET / 500 in 63ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 500 in 25ms
+ GET / 500 in 45ms
+ GET / 500 in 103ms
+ ⨯ ./components/home/PromoBanner.tsx
+Error: 
+  [31mx[0m Expression expected
+    ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/PromoBanner.tsx[0m:70:1]
+ [2m70[0m |     </section>
+ [2m71[0m |   )
+ [2m72[0m | }
+ [2m73[0m |     </section>
+    : [31;1m     ^[0m
+ [2m74[0m |   )
+ [2m75[0m | }
+    `----
+
+  [31mx[0m Expression expected
+    ,-[[36;1;4m/home/meareg/client-projects/ecommerce-web/frontend/components/home/PromoBanner.tsx[0m:71:1]
+ [2m71[0m |   )
+ [2m72[0m | }
+ [2m73[0m |     </section>
+ [2m74[0m |   )
+    : [31;1m  ^[0m
+ [2m75[0m | }
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/home/PromoBanner.tsx
+./app/page.tsx
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 500 in 814ms
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 500 in 10ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 500 in 22ms
+ GET / 500 in 29ms
+ GET / 500 in 46ms
+ GET / 500 in 53ms
+ ✓ Compiled /_not-found in 3.1s (1161 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 404 in 3313ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 200 in 164ms
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 404 in 224ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 200 in 50ms
+ GET /_next/static/webpack/b10d1dc142f61d61.webpack.hot-update.json 404 in 85ms
+ GET / 200 in 207ms
+ GET / 200 in 310ms
+ GET / 200 in 308ms

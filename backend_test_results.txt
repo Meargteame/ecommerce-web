@@ -1,0 +1,63 @@
+==========================================
+E-Commerce API Testing Script
+==========================================
+
+[1;33m→ Testing health check...[0m
+[0;32m✓ Health check passed[0m
+[1;33m→ Registering new user...[0m
+[0;32m✓ User registration successful[0m
+[1;33m→ Testing login...[0m
+[0;32m✓ Login successful[0m
+[1;33m→ Getting current user...[0m
+[0;32m✓ Get current user successful[0m
+[1;33m→ Creating admin user...[0m
+[1;33m→ Updating user role to admin...[0m
+[0;32m✓ Admin user created and logged in[0m
+[1;33m→ Creating category...[0m
+[0;32m✓ Category created[0m
+[1;33m→ Creating product...[0m
+[0;32m✓ Product created[0m
+[1;33m→ Creating product variant...[0m
+[0;32m✓ Product variant created[0m
+[1;33m→ Getting products...[0m
+[0;32m✓ Get products successful[0m
+[1;33m→ Adding item to cart...[0m
+[0;32m✓ Item added to cart[0m
+[1;33m→ Getting cart...[0m
+[0;32m✓ Get cart successful[0m
+[1;33m→ Creating order...[0m
+[0;32m✓ Order created[0m
+[1;33m→ Order Number: ORD-20260314-0502[0m
+[1;33m→ Processing payment...[0m
+[0;32m✓ Payment processed[0m
+[1;33m→ Payment Status: completed[0m
+[1;33m→ Creating shipment...[0m
+[0;32m✓ Shipment created[0m
+[1;33m→ Tracking Number: DHL4342201317HFNH[0m
+[1;33m→ Tracking shipment...[0m
+[0;32m✓ Shipment tracking successful[0m
+[1;33m→ Creating review...[0m
+[0;32m✓ Review created[0m
+[1;33m→ Creating promotion...[0m
+[0;32m✓ Promotion created[0m
+[1;33m→ Validating coupon...[0m
+[0;32m✓ Coupon validation successful[0m
+[1;33m→ Tracking analytics event...[0m
+[0;32m✓ Analytics event tracked[0m
+[1;33m→ Getting dashboard metrics...[0m
+[0;32m✓ Dashboard metrics retrieved[0m
+
+==========================================
+Test Summary
+==========================================
+[0;32m✓ All tests passed![0m
+
+Test Data Created:
+  User Email: testuser_1773443420@example.com
+  Admin Email: admin_1773443420@example.com
+  Product ID: f461a7a8-2ade-4a6b-870e-9bd32e99d3f6
+  Order Number: ORD-20260314-0502
+  Tracking Number: DHL4342201317HFNH
+
+You can now test the API manually using these credentials.
+==========================================

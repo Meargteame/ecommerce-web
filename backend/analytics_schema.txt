@@ -1,0 +1,23 @@
+                           Table "public.analytics_events"
+   Column   |            Type             | Collation | Nullable |      Default       
+------------+-----------------------------+-----------+----------+--------------------
+ id         | uuid                        |           | not null | uuid_generate_v4()
+ user_id    | uuid                        |           |          | 
+ session_id | character varying(255)      |           |          | 
+ event_type | character varying(50)       |           | not null | 
+ event_data | jsonb                       |           |          | 
+ ip_address | inet                        |           |          | 
+ user_agent | text                        |           |          | 
+ referrer   | character varying(500)      |           |          | 
+ created_at | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "analytics_events_pkey" PRIMARY KEY, btree (id)
+    "idx_analytics_events_created_at" btree (created_at)
+    "idx_analytics_events_event_type" btree (event_type)
+    "idx_analytics_events_session_id" btree (session_id)
+    "idx_analytics_events_user_id" btree (user_id)
+Check constraints:
+    "analytics_events_event_type_check" CHECK (event_type::text = ANY (ARRAY['page_view'::character varying, 'product_view'::character varying, 'add_to_cart'::character varying, 'remove_from_cart'::character varying, 'checkout_start'::character varying, 'checkout_complete'::character varying, 'search'::character varying, 'click'::character varying]::text[]))
+Foreign-key constraints:
+    "analytics_events_user_id_fkey" FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+

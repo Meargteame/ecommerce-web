@@ -1,0 +1,40 @@
+ALTER TABLE
+ALTER TABLE
+UPDATE 0
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+UPDATE 0
+UPDATE 0
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+UPDATE 0
+UPDATE 0
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+UPDATE 0
+UPDATE 0
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+UPDATE 0
+UPDATE 0
+ALTER TABLE
+UPDATE 0
+psql:migrations/007_align_schema_with_services.sql:109: NOTICE:  relation "cart_items" already exists, skipping
+CREATE TABLE
+psql:migrations/007_align_schema_with_services.sql:111: ERROR:  column "user_id" does not exist
+psql:migrations/007_align_schema_with_services.sql:112: NOTICE:  relation "idx_cart_items_product_id" already exists, skipping
+CREATE INDEX
+psql:migrations/007_align_schema_with_services.sql:123: NOTICE:  relation "wishlists" already exists, skipping
+CREATE TABLE
+psql:migrations/007_align_schema_with_services.sql:125: NOTICE:  relation "idx_wishlists_user_id" already exists, skipping
+CREATE INDEX

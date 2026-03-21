@@ -1,0 +1,14 @@
+id
+product_id
+user_id
+order_id
+rating
+title
+comment
+is_verified_purchase
+is_approved
+helpful_count
+created_at
+updated_at
+seller_response
+seller_response_at

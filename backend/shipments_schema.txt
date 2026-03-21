@@ -1,0 +1,33 @@
+                                          Table "public.shipments"
+         Column          |            Type             | Collation | Nullable |           Default            
+-------------------------+-----------------------------+-----------+----------+------------------------------
+ id                      | uuid                        |           | not null | uuid_generate_v4()
+ order_id                | uuid                        |           | not null | 
+ courier                 | character varying(50)       |           | not null | 
+ tracking_number         | character varying(100)      |           | not null | 
+ tracking_url            | character varying(500)      |           |          | 
+ status                  | character varying(20)       |           |          | 'pending'::character varying
+ weight                  | numeric(10,2)               |           |          | 
+ weight_unit             | character varying(10)       |           |          | 'kg'::character varying
+ estimated_delivery_date | date                        |           |          | 
+ actual_delivery_date    | date                        |           |          | 
+ metadata                | jsonb                       |           |          | 
+ notes                   | text                        |           |          | 
+ shipped_at              | timestamp without time zone |           |          | 
+ delivered_at            | timestamp without time zone |           |          | 
+ created_at              | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ updated_at              | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "shipments_pkey" PRIMARY KEY, btree (id)
+    "idx_shipments_created_at" btree (created_at)
+    "idx_shipments_order_id" btree (order_id)
+    "idx_shipments_status" btree (status)
+    "idx_shipments_tracking_number" btree (tracking_number)
+    "shipments_tracking_number_key" UNIQUE CONSTRAINT, btree (tracking_number)
+Check constraints:
+    "shipments_status_check" CHECK (status::text = ANY (ARRAY['pending'::character varying, 'picked_up'::character varying, 'in_transit'::character varying, 'out_for_delivery'::character varying, 'delivered'::character varying, 'failed'::character varying, 'returned'::character varying]::text[]))
+Foreign-key constraints:
+    "shipments_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+Triggers:
+    update_shipments_updated_at BEFORE UPDATE ON shipments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+

@@ -1,0 +1,19 @@
+                         Table "public.order_status_history"
+   Column   |            Type             | Collation | Nullable |      Default       
+------------+-----------------------------+-----------+----------+--------------------
+ id         | uuid                        |           | not null | uuid_generate_v4()
+ order_id   | uuid                        |           | not null | 
+ status     | character varying(20)       |           | not null | 
+ notes      | text                        |           |          | 
+ changed_by | uuid                        |           |          | 
+ created_at | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ created_by | uuid                        |           |          | 
+Indexes:
+    "order_status_history_pkey" PRIMARY KEY, btree (id)
+    "idx_order_status_history_created_at" btree (created_at)
+    "idx_order_status_history_order_id" btree (order_id)
+Foreign-key constraints:
+    "order_status_history_changed_by_fkey" FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL
+    "order_status_history_created_by_fkey" FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    "order_status_history_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+

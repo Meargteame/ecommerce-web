@@ -1,0 +1,16 @@
+id
+user_id
+store_name
+store_description
+store_logo_url
+store_banner_url
+contact_email
+contact_phone
+payout_email
+total_sales
+total_revenue
+rating
+is_verified
+is_active
+created_at
+updated_at

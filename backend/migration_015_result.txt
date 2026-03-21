@@ -1,0 +1,6 @@
+CREATE TABLE
+psql:backend/migrations/015_admin_platform_tables.sql:25: NOTICE:  relation "support_tickets" already exists, skipping
+CREATE TABLE
+INSERT 0 8
+psql:backend/migrations/015_admin_platform_tables.sql:40: NOTICE:  column "account_status" of relation "users" already exists, skipping
+ALTER TABLE

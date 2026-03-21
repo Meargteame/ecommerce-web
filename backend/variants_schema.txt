@@ -1,0 +1,45 @@
+                                Table "public.product_variants"
+       Column        |            Type             | Collation | Nullable |      Default       
+---------------------+-----------------------------+-----------+----------+--------------------
+ id                  | uuid                        |           | not null | uuid_generate_v4()
+ product_id          | uuid                        |           | not null | 
+ sku                 | character varying(100)      |           | not null | 
+ name                | character varying(255)      |           | not null | 
+ price               | numeric(10,2)               |           | not null | 
+ compare_at_price    | numeric(10,2)               |           |          | 
+ stock_quantity      | integer                     |           |          | 0
+ weight              | numeric(10,2)               |           |          | 
+ option1_name        | character varying(50)       |           |          | 
+ option1_value       | character varying(100)      |           |          | 
+ option2_name        | character varying(50)       |           |          | 
+ option2_value       | character varying(100)      |           |          | 
+ option3_name        | character varying(50)       |           |          | 
+ option3_value       | character varying(100)      |           |          | 
+ is_active           | boolean                     |           |          | true
+ created_at          | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ updated_at          | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ variant_name        | character varying(255)      |           |          | 
+ price_adjustment    | numeric(10,2)               |           |          | 0
+ low_stock_threshold | integer                     |           |          | 10
+ weight_grams        | integer                     |           |          | 
+ attributes          | jsonb                       |           |          | '{}'::jsonb
+Indexes:
+    "product_variants_pkey" PRIMARY KEY, btree (id)
+    "idx_product_variants_is_active" btree (is_active)
+    "idx_product_variants_product_id" btree (product_id)
+    "idx_product_variants_sku" btree (sku)
+    "product_variants_sku_key" UNIQUE CONSTRAINT, btree (sku)
+Check constraints:
+    "product_variants_compare_at_price_check" CHECK (compare_at_price >= 0::numeric)
+    "product_variants_price_check" CHECK (price >= 0::numeric)
+    "product_variants_stock_quantity_check" CHECK (stock_quantity >= 0)
+Foreign-key constraints:
+    "product_variants_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+Referenced by:
+    TABLE "cart_items" CONSTRAINT "cart_items_product_variant_id_fkey" FOREIGN KEY (product_variant_id) REFERENCES product_variants(id) ON DELETE CASCADE
+    TABLE "cart_items" CONSTRAINT "cart_items_variant_id_fkey" FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE CASCADE
+    TABLE "order_items" CONSTRAINT "order_items_product_variant_id_fkey" FOREIGN KEY (product_variant_id) REFERENCES product_variants(id) ON DELETE RESTRICT
+    TABLE "order_items" CONSTRAINT "order_items_variant_id_fkey" FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE RESTRICT
+Triggers:
+    update_product_variants_updated_at BEFORE UPDATE ON product_variants FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+

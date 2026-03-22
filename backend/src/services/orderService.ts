@@ -2,6 +2,7 @@ import pool from '../config/database'
 import cartService from './cartService'
 import inventoryService from './inventoryService'
 import notificationService from './notificationService'
+import crypto from 'crypto'
 
 interface CreateOrderDTO {
   userId: string
@@ -83,9 +84,9 @@ export class OrderService {
   }
 
   async createOrder(data: CreateOrderDTO): Promise<Order> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       const cart = await cartService.getCart(data.userId)
       if (cart.items.length === 0) throw new Error('Cart is empty')
@@ -112,10 +113,11 @@ export class OrderService {
 
       const billing = data.billingAddress || data.shippingAddress
       const orderNumber = this.generateOrderNumber()
+      const orderId = crypto.randomUUID()
 
-      const orderResult = await client.query(
+      await client.query(
         `INSERT INTO orders (
-          order_number, user_id, status, subtotal, shipping_cost, tax_amount,
+          id, order_number, user_id, status, subtotal, shipping_cost, tax_amount,
           discount_amount, total_amount, currency, shipping_address, billing_address,
           customer_email, customer_phone, notes,
           shipping_full_name, shipping_phone, shipping_address_line1, shipping_address_line2,
@@ -123,12 +125,12 @@ export class OrderService {
           billing_full_name, billing_phone, billing_address_line1, billing_address_line2,
           billing_city, billing_state, billing_postal_code, billing_country
         ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-          $15,$16,$17,$18,$19,$20,$21,$22,
-          $23,$24,$25,$26,$27,$28,$29,$30
-        ) RETURNING *`,
+          ?,?,?,?,?,?,?,?,?,?,?,?,?,?,
+          ?,?,?,?,?,?,?,?,
+          ?,?,?,?,?,?,?,?,?
+        )`,
         [
-          orderNumber, data.userId, 'placed',
+          orderId, orderNumber, data.userId, 'placed',
           subtotal, shippingCost, taxAmount, discountAmount, totalAmount, 'USD',
           JSON.stringify(data.shippingAddress), JSON.stringify(billing),
           data.customerEmail, data.customerPhone || null, data.notes || null,
@@ -143,38 +145,40 @@ export class OrderService {
         ]
       )
 
-      const order = orderResult.rows[0]
-
       for (const item of cart.items) {
         await client.query(
           `INSERT INTO order_items (
-            order_id, product_id, variant_id, product_variant_id, product_name, variant_name,
+            id, order_id, product_id, variant_id, product_variant_id, product_name, variant_name,
             sku, product_sku, quantity, unit_price, subtotal
-          ) VALUES ($1,$2,$3,$3,$4,$5,$6,$6,$7,$8,$9)`,
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
-            order.id, item.productId, item.variantId || null,
+            crypto.randomUUID(), orderId, item.productId, item.variantId || null, item.variantId || null,
             item.product.name, item.variant?.variantName || null,
-            item.variant?.sku || 'N/A', item.quantity, item.unitPrice, item.subtotal,
+            item.variant?.sku || 'N/A', item.variant?.sku || 'N/A', item.quantity, item.unitPrice, item.subtotal,
           ]
         )
       }
 
       await client.query(
-        'INSERT INTO order_status_history (order_id, status, notes) VALUES ($1,$2,$3)',
-        [order.id, 'placed', 'Order placed']
+        'INSERT INTO order_status_history (id, order_id, status, notes) VALUES (?,?,?,?)',
+        [crypto.randomUUID(), orderId, 'placed', 'Order placed']
       )
 
       await cartService.clearCart(data.userId)
-      await client.query('COMMIT')
+      await client.commit()
 
-      // Send confirmation email — non-blocking, never fails the order
+      // Fetch the created order
+      const order = await this.getOrder(orderId)
+      if (!order) throw new Error('Order not found after creation')
+
+      // Send confirmation email — non-blocking
       notificationService.sendOrderConfirmation(order.id).catch((err) =>
         console.error('Order confirmation email failed:', err)
       )
 
-      return this.mapOrder(order)
+      return order
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -183,8 +187,8 @@ export class OrderService {
 
   async getOrder(id: string, userId?: string): Promise<Order | null> {
     const query = userId
-      ? 'SELECT * FROM orders WHERE id = $1 AND user_id = $2'
-      : 'SELECT * FROM orders WHERE id = $1'
+      ? 'SELECT * FROM orders WHERE id = ? AND user_id = ?'
+      : 'SELECT * FROM orders WHERE id = ?'
     const params = userId ? [id, userId] : [id]
     const result = await pool.query(query, params)
     if (result.rows.length === 0) return null
@@ -196,9 +200,9 @@ export class OrderService {
     if (!order) return null
 
     const itemsResult = await pool.query(
-      'SELECT * FROM order_items WHERE order_id = $1', [id]
+      'SELECT * FROM order_items WHERE order_id = ?', [id]
     )
-    const items = itemsResult.rows.map((row) => ({
+    const items = itemsResult.rows.map((row: any) => ({
       id: row.id,
       productId: row.product_id,
       variantId: row.variant_id,
@@ -211,9 +215,9 @@ export class OrderService {
     }))
 
     const historyResult = await pool.query(
-      'SELECT * FROM order_status_history WHERE order_id = $1 ORDER BY created_at ASC', [id]
+      'SELECT * FROM order_status_history WHERE order_id = ? ORDER BY created_at ASC', [id]
     )
-    const statusHistory = historyResult.rows.map((row) => ({
+    const statusHistory = historyResult.rows.map((row: any) => ({
       id: row.id,
       status: row.status,
       notes: row.notes,
@@ -227,12 +231,11 @@ export class OrderService {
     const { userId, status, startDate, endDate, limit = 20, offset = 0 } = filters
     const conditions: string[] = []
     const values: any[] = []
-    let p = 1
 
-    if (userId)    { conditions.push('user_id = $' + p++);     values.push(userId) }
-    if (status)    { conditions.push('status = $' + p++);      values.push(status) }
-    if (startDate) { conditions.push('created_at >= $' + p++); values.push(startDate) }
-    if (endDate)   { conditions.push('created_at <= $' + p++); values.push(endDate) }
+    if (userId)    { conditions.push('user_id = ?');     values.push(userId) }
+    if (status)    { conditions.push('status = ?');      values.push(status) }
+    if (startDate) { conditions.push('created_at >= ?'); values.push(startDate) }
+    if (endDate)   { conditions.push('created_at <= ?'); values.push(endDate) }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
@@ -242,48 +245,52 @@ export class OrderService {
     const total = parseInt(countResult.rows[0].total)
 
     const result = await pool.query(
-      `SELECT * FROM orders ${where} ORDER BY created_at DESC LIMIT $${p} OFFSET $${p + 1}`,
+      `SELECT * FROM orders ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       [...values, limit, offset]
     )
 
-    return { orders: result.rows.map((r) => this.mapOrder(r)), total }
+    return { orders: result.rows.map((r: any) => this.mapOrder(r)), total }
   }
 
   async updateOrderStatus(id: string, status: OrderStatus, notes?: string, userId?: string): Promise<Order> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
-      const orderCheck = await client.query(
-        'SELECT id, status FROM orders WHERE id = $1', [id]
+      const [checkRows] = await client.query(
+        'SELECT id, status FROM orders WHERE id = ?', [id]
       )
-      if (orderCheck.rows.length === 0) throw new Error('Order not found')
+      const orderCheck = checkRows as any[]
+      if (orderCheck.length === 0) throw new Error('Order not found')
 
-      const currentStatus = orderCheck.rows[0].status
+      const currentStatus = orderCheck[0].status
       if (!this.isValidStatusTransition(currentStatus, status)) {
         throw new Error(`Invalid status transition from ${currentStatus} to ${status}`)
       }
 
-      const result = await client.query(
-        'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      await client.query(
+        'UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [status, id]
       )
 
       await client.query(
-        'INSERT INTO order_status_history (order_id, status, notes, created_by) VALUES ($1,$2,$3,$4)',
-        [id, status, notes || null, userId || null]
+        'INSERT INTO order_status_history (id, order_id, status, notes, created_by) VALUES (?,?,?,?,?)',
+        [crypto.randomUUID(), id, status, notes || null, userId || null]
       )
 
-      await client.query('COMMIT')
+      await client.commit()
+
+      const order = await this.getOrder(id)
+      if (!order) throw new Error('Order not found after status update')
 
       // Send status update email — non-blocking
       notificationService.sendOrderStatusUpdate(id, status).catch((err) =>
         console.error('Order status email failed:', err)
       )
 
-      return this.mapOrder(result.rows[0])
+      return order
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -291,41 +298,45 @@ export class OrderService {
   }
 
   async cancelOrder(id: string, userId: string, reason?: string): Promise<Order> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
-      const orderResult = await client.query(
-        'SELECT * FROM orders WHERE id = $1 AND user_id = $2', [id, userId]
+      const [orderRows] = await client.query(
+        'SELECT * FROM orders WHERE id = ? AND user_id = ?', [id, userId]
       )
-      if (orderResult.rows.length === 0) throw new Error('Order not found')
+      const orderCheck = orderRows as any[]
+      if (orderCheck.length === 0) throw new Error('Order not found')
 
-      const order = orderResult.rows[0]
+      const order = orderCheck[0]
       if (!['placed', 'payment_confirmed', 'processing'].includes(order.status)) {
         throw new Error('Order cannot be cancelled at this stage')
       }
 
-      const itemsResult = await client.query(
-        'SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = $1', [id]
+      const [itemRows] = await client.query(
+        'SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?', [id]
       )
       await inventoryService.releaseCartItems(
-        itemsResult.rows.map((r) => ({ productId: r.product_id, variantId: r.variant_id, quantity: r.quantity }))
+        (itemRows as any[]).map((r) => ({ productId: r.product_id, variantId: r.variant_id, quantity: r.quantity }))
       )
 
-      const result = await client.query(
-        'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      await client.query(
+        'UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         ['cancelled', id]
       )
 
       await client.query(
-        'INSERT INTO order_status_history (order_id, status, notes, created_by) VALUES ($1,$2,$3,$4)',
-        [id, 'cancelled', reason || 'Cancelled by customer', userId]
+        'INSERT INTO order_status_history (id, order_id, status, notes, created_by) VALUES (?,?,?,?,?)',
+        [crypto.randomUUID(), id, 'cancelled', reason || 'Cancelled by customer', userId]
       )
 
-      await client.query('COMMIT')
-      return this.mapOrder(result.rows[0])
+      await client.commit()
+      
+      const updatedOrder = await this.getOrder(id)
+      if (!updatedOrder) throw new Error('Order not found after cancellation')
+      return updatedOrder
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()

@@ -18,7 +18,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     if (sort === 'newest') orderBy = 'q.created_at DESC'
     if (sort === 'answered') orderBy = 'q.is_answered DESC, q.created_at DESC'
     
-    let whereClause = 'WHERE q.product_id = $1'
+    let whereClause = 'WHERE q.product_id = ?'
     if (answered === 'answered') whereClause += ' AND q.is_answered = true'
     if (answered === 'unanswered') whereClause += ' AND q.is_answered = false'
     
@@ -26,29 +26,28 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       `SELECT 
         q.*,
         u.first_name as asker_first_name, u.last_name as asker_last_name,
-        (SELECT json_agg(json_build_object(
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT(
           'id', a.id,
           'answer', a.answer,
           'isOfficial', a.is_official,
           'votes', a.votes,
           'createdAt', a.created_at,
           'author', CASE 
-            WHEN a.seller_id IS NOT NULL THEN json_build_object(
+            WHEN a.seller_id IS NOT NULL THEN JSON_OBJECT(
               'type', 'seller',
               'name', sp.store_name,
               'isVerified', sp.is_verified
             )
-            ELSE json_build_object(
+            ELSE JSON_OBJECT(
               'type', 'customer',
               'firstName', au.first_name,
               'lastName', au.last_name
             )
           END
-        ) ORDER BY a.is_official DESC, a.votes DESC)
-         FROM product_answers a
+        ))
+         FROM (SELECT * FROM product_answers WHERE question_id = q.id ORDER BY is_official DESC, votes DESC) a
          LEFT JOIN users au ON au.id = a.user_id
          LEFT JOIN seller_profiles sp ON sp.id = a.seller_id
-         WHERE a.question_id = q.id
         ) as answers
       FROM product_questions q
       JOIN users u ON u.id = q.user_id
@@ -61,9 +60,9 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     const statsResult = await pool.query(
       `SELECT 
         COUNT(*) as total_questions,
-        COUNT(*) FILTER (WHERE is_answered) as answered_questions,
+        SUM(CASE WHEN is_answered THEN 1 ELSE 0 END) as answered_questions,
         AVG(votes) as avg_votes
-      FROM product_questions WHERE product_id = $1`,
+      FROM product_questions WHERE product_id = ?`,
       [productId]
     )
     
@@ -90,7 +89,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     // Check if user already asked this question
     const duplicateCheck = await pool.query(
       `SELECT id FROM product_questions 
-       WHERE product_id = $1 AND user_id = $2 AND question ILIKE $3`,
+       WHERE product_id = ? AND user_id = ? AND question LIKE ?`,
       [productId, userId, `%${question}%`]
     )
     
@@ -98,33 +97,35 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       throw new AppError('You have already asked a similar question', 400)
     }
     
-    const result = await pool.query(
-      `INSERT INTO product_questions (product_id, user_id, question)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [productId, userId, question.trim()]
+    const id = (await import('crypto')).randomUUID()
+    await pool.query(
+      `INSERT INTO product_questions (id, product_id, user_id, question)
+       VALUES (?, ?, ?, ?)`,
+      [id, productId, userId, question.trim()]
     )
+    const result = await pool.query('SELECT * FROM product_questions WHERE id = ?', [id])
     
     // Notify seller
     const sellerResult = await pool.query(
       `SELECT user_id FROM seller_profiles sp
        JOIN products p ON p.seller_id = sp.user_id
-       WHERE p.id = $1`,
+       WHERE p.id = ?`,
       [productId]
     )
     
     if (sellerResult.rows.length > 0) {
       const targetSellerId = sellerResult.rows[0].user_id
+      const notificationId = (await import('crypto')).randomUUID()
       await pool.query(
-        `INSERT INTO notifications (user_id, type, title, message)
-         VALUES ($1, $2, $3, $4)`,
-        [targetSellerId, 'system', 'New Product Question', 'A customer has asked a new question about your product.']
+        `INSERT INTO notifications (id, user_id, type, title, message)
+         VALUES (?, ?, ?, ?, ?)`,
+        [notificationId, targetSellerId, 'system', 'New Product Question', 'A customer has asked a new question about your product.']
       ).catch(e => console.error('Failed to send question notification'))
     }
     
     res.status(201).json({
       message: 'Question posted successfully',
-      data: result.rows[0]
+      data: (result as any[])[0]
     })
   } catch (error) {
     if (error instanceof AppError) throw error
@@ -139,7 +140,7 @@ router.post('/:questionId/vote', authenticate, async (req: AuthRequest, res: Res
     const { vote } = req.body // 1 or -1
     
     await pool.query(
-      `UPDATE product_questions SET votes = votes + $1 WHERE id = $2`,
+      `UPDATE product_questions SET votes = votes + ? WHERE id = ?`,
       [vote, questionId]
     )
     
@@ -164,39 +165,41 @@ router.post('/:questionId/answers', authenticate, async (req: AuthRequest, res: 
     const sellerCheck = await pool.query(
       `SELECT sp.id as seller_profile_id
        FROM products p
-       JOIN seller_profiles sp ON sp.user_id = $1
-       WHERE p.id = $2 AND p.seller_id = $1`,
-      [userId, productId]
+       JOIN seller_profiles sp ON sp.user_id = ?
+       WHERE p.id = ? AND p.seller_id = ?`,
+      [userId, productId, userId]
     )
     
     const isSeller = sellerCheck.rows.length > 0
     const sellerProfileId = isSeller ? sellerCheck.rows[0].seller_profile_id : null
     
-    const result = await pool.query(
-      `INSERT INTO product_answers (question_id, user_id, seller_id, answer, is_official)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [questionId, userId, sellerProfileId, answer.trim(), isSeller]
+    const id = (await import('crypto')).randomUUID()
+    await pool.query(
+      `INSERT INTO product_answers (id, question_id, user_id, seller_id, answer, is_official)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, questionId, userId, sellerProfileId, answer.trim(), isSeller]
     )
+    const result = await pool.query('SELECT * FROM product_answers WHERE id = ?', [id])
     
     // Notify question asker
     const questionResult = await pool.query(
-      `SELECT user_id FROM product_questions WHERE id = $1`,
+      `SELECT user_id FROM product_questions WHERE id = ?`,
       [questionId]
     )
     
     if (questionResult.rows.length > 0 && questionResult.rows[0].user_id !== userId) {
       const askerId = questionResult.rows[0].user_id
+      const notificationId = (await import('crypto')).randomUUID()
       await pool.query(
-        `INSERT INTO notifications (user_id, type, title, message)
-         VALUES ($1, $2, $3, $4)`,
-        [askerId, 'system', 'Question Answered', 'Someone has answered your product question.']
+        `INSERT INTO notifications (id, user_id, type, title, message)
+         VALUES (?, ?, ?, ?, ?)`,
+        [notificationId, askerId, 'system', 'Question Answered', 'Someone has answered your product question.']
       ).catch(e => console.error('Failed to notify question asker:', e))
     }
     
     res.status(201).json({
       message: 'Answer posted successfully',
-      data: result.rows[0]
+      data: (result as any[])[0]
     })
   } catch (error) {
     if (error instanceof AppError) throw error
@@ -211,7 +214,7 @@ router.post('/:questionId/answers/:answerId/vote', authenticate, async (req: Aut
     const { vote } = req.body
     
     await pool.query(
-      `UPDATE product_answers SET votes = votes + $1 WHERE id = $2`,
+      `UPDATE product_answers SET votes = votes + ? WHERE id = ?`,
       [vote, answerId]
     )
     
@@ -230,7 +233,7 @@ router.delete('/:questionId', authenticate, async (req: AuthRequest, res: Respon
     
     // Check ownership or admin
     const checkResult = await pool.query(
-      `SELECT user_id FROM product_questions WHERE id = $1`,
+      `SELECT user_id FROM product_questions WHERE id = ?`,
       [questionId]
     )
     
@@ -245,7 +248,7 @@ router.delete('/:questionId', authenticate, async (req: AuthRequest, res: Respon
       throw new AppError('Not authorized to delete this question', 403)
     }
     
-    await pool.query(`DELETE FROM product_questions WHERE id = $1`, [questionId])
+    await pool.query(`DELETE FROM product_questions WHERE id = ?`, [questionId])
     
     res.json({ message: 'Question deleted' })
   } catch (error) {
@@ -262,7 +265,7 @@ router.delete('/:questionId/answers/:answerId', authenticate, async (req: AuthRe
     const userRole = req.user!.role
     
     const checkResult = await pool.query(
-      `SELECT user_id FROM product_answers WHERE id = $1`,
+      `SELECT user_id FROM product_answers WHERE id = ?`,
       [answerId]
     )
     
@@ -277,7 +280,7 @@ router.delete('/:questionId/answers/:answerId', authenticate, async (req: AuthRe
       throw new AppError('Not authorized', 403)
     }
     
-    await pool.query(`DELETE FROM product_answers WHERE id = $1`, [answerId])
+    await pool.query(`DELETE FROM product_answers WHERE id = ?`, [answerId])
     
     res.json({ message: 'Answer deleted' })
   } catch (error) {
@@ -298,7 +301,7 @@ router.get('/my-questions', authenticate, async (req: AuthRequest, res: Response
         (SELECT COUNT(*) FROM product_answers WHERE question_id = q.id) as answer_count
       FROM product_questions q
       JOIN products p ON p.id = q.product_id
-      WHERE q.user_id = $1
+      WHERE q.user_id = ?
       ORDER BY q.created_at DESC`,
       [userId]
     )
@@ -323,7 +326,7 @@ router.get('/pending', authenticate, authorize('seller'), async (req: AuthReques
       FROM product_questions q
       JOIN products p ON p.id = q.product_id
       JOIN users u ON u.id = q.user_id
-      WHERE p.seller_id = $1 AND q.is_answered = false
+      WHERE p.seller_id = ? AND q.is_answered = false
       ORDER BY q.created_at ASC`,
       [sellerId]
     )

@@ -1,4 +1,5 @@
 import pool from '../config/database'
+import crypto from 'crypto'
 
 interface Address {
   country: string
@@ -177,22 +178,23 @@ export class ShippingService {
   }
 
   async createShipment(data: CreateShipmentDTO): Promise<Shipment> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       // Verify order exists and is in valid state
-      const orderResult = await client.query(
-        'SELECT id, status FROM orders WHERE id = $1',
+      const [orderResult] = await client.query(
+        'SELECT id, status FROM orders WHERE id = ?',
         [data.orderId]
       )
+      const orders = orderResult as any[]
 
-      if (orderResult.rows.length === 0) {
+      if (orders.length === 0) {
         throw new Error('Order not found')
       }
 
-      const order = orderResult.rows[0]
+      const order = orders[0]
 
       if (!['payment_confirmed', 'processing', 'packed'].includes(order.status)) {
         throw new Error('Order is not ready for shipment')
@@ -214,13 +216,14 @@ export class ShippingService {
       estimatedDeliveryDate.setDate(estimatedDeliveryDate.getDate() + 5) // Default 5 days
 
       // Create shipment record
-      const shipmentResult = await client.query(
+      const id = crypto.randomUUID()
+      await client.query(
         `INSERT INTO shipments (
-          order_id, courier, tracking_number, tracking_url, status,
+          id, order_id, courier, tracking_number, tracking_url, status,
           weight, weight_unit, estimated_delivery_date, notes, shipped_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
-        RETURNING *`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
         [
+          id,
           data.orderId,
           data.courier,
           trackingNumber,
@@ -235,21 +238,24 @@ export class ShippingService {
 
       // Update order status to shipped
       await client.query(
-        'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        'UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         ['shipped', data.orderId]
       )
 
       // Add to order status history
+      const historyId = crypto.randomUUID()
       await client.query(
-        'INSERT INTO order_status_history (order_id, status, notes) VALUES ($1, $2, $3)',
-        [data.orderId, 'shipped', `Shipped via ${courier.name} - Tracking: ${trackingNumber}`]
+        'INSERT INTO order_status_history (id, order_id, status, notes) VALUES (?, ?, ?, ?)',
+        [historyId, data.orderId, 'shipped', `Shipped via ${courier.name} - Tracking: ${trackingNumber}`]
       )
 
-      await client.query('COMMIT')
+      await client.commit()
 
-      return this.mapShipment(shipmentResult.rows[0])
+      const shipment = await this.getShipmentByOrderId(data.orderId)
+      if (!shipment) throw new Error('Failed to retrieve shipment after creation')
+      return shipment
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -258,7 +264,7 @@ export class ShippingService {
 
   async getTrackingInfo(trackingNumber: string): Promise<TrackingInfo | null> {
     const result = await pool.query(
-      'SELECT * FROM shipments WHERE tracking_number = $1',
+      'SELECT * FROM shipments WHERE tracking_number = ?',
       [trackingNumber]
     )
 
@@ -287,10 +293,10 @@ export class ShippingService {
     status: string,
     notes?: string
   ): Promise<Shipment> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       const validStatuses = [
         'pending',
@@ -307,9 +313,8 @@ export class ShippingService {
       }
 
       // Update shipment status
-      const updateFields: string[] = ['status = $1', 'updated_at = CURRENT_TIMESTAMP']
+      const updateFields: string[] = ['status = ?', 'updated_at = CURRENT_TIMESTAMP']
       const values: any[] = [status]
-      let paramCount = 1
 
       if (status === 'delivered') {
         updateFields.push(`delivered_at = CURRENT_TIMESTAMP`)
@@ -317,45 +322,47 @@ export class ShippingService {
       }
 
       if (notes) {
-        paramCount++
-        updateFields.push(`notes = $${paramCount}`)
+        updateFields.push(`notes = ?`)
         values.push(notes)
       }
 
-      paramCount++
       values.push(trackingNumber)
 
-      const shipmentResult = await client.query(
+      const [result] = await client.query(
         `UPDATE shipments SET ${updateFields.join(', ')} 
-         WHERE tracking_number = $${paramCount}
-         RETURNING *`,
+         WHERE tracking_number = ?`,
         values
       )
 
-      if (shipmentResult.rows.length === 0) {
+      if ((result as any).affectedRows === 0) {
         throw new Error('Shipment not found')
       }
 
-      const shipment = shipmentResult.rows[0]
+      const [shipmentResult] = await client.query(
+        'SELECT * FROM shipments WHERE tracking_number = ?',
+        [trackingNumber]
+      )
+      const shipment = (shipmentResult as any[])[0]
 
       // Update order status if delivered
       if (status === 'delivered') {
         await client.query(
-          'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          'UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           ['delivered', shipment.order_id]
         )
 
+        const historyId = crypto.randomUUID()
         await client.query(
-          'INSERT INTO order_status_history (order_id, status, notes) VALUES ($1, $2, $3)',
-          [shipment.order_id, 'delivered', notes || 'Package delivered successfully']
+          'INSERT INTO order_status_history (id, order_id, status, notes) VALUES (?, ?, ?, ?)',
+          [historyId, shipment.order_id, 'delivered', notes || 'Package delivered successfully']
         )
       }
 
-      await client.query('COMMIT')
+      await client.commit()
 
       return this.mapShipment(shipment)
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -364,7 +371,7 @@ export class ShippingService {
 
   async getShipmentByOrderId(orderId: string): Promise<Shipment | null> {
     const result = await pool.query(
-      'SELECT * FROM shipments WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1',
+      'SELECT * FROM shipments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1',
       [orderId]
     )
 
@@ -444,7 +451,8 @@ export class ShippingService {
   private generateTrackingNumber(courier: string): string {
     const prefix = courier.toUpperCase().substring(0, 3)
     const timestamp = Date.now().toString().substring(5)
-    const random = Math.random().toString(36).substring(2, 8).toUpperCase()
+    // Using randomBytes for tracking number randomness
+    const random = crypto.randomBytes(3).toString('hex').toUpperCase()
     return `${prefix}${timestamp}${random}`
   }
 

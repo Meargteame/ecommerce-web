@@ -11,7 +11,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response, next) => {
     const userId = req.user!.userId
     
     const result = await pool.query(
-      `SELECT * FROM payment_methods WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC`,
+      `SELECT * FROM payment_methods WHERE user_id = ? ORDER BY is_default DESC, created_at DESC`,
       [userId]
     )
     
@@ -27,34 +27,36 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response, next) => 
     const userId = req.user!.userId
     const { type, provider, providerToken, lastFour, brand, expiryMonth, expiryYear, holderName, isDefault, billingAddressId } = req.body
     
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
       
       if (isDefault) {
         await client.query(
-          `UPDATE payment_methods SET is_default = false WHERE user_id = $1`,
+          `UPDATE payment_methods SET is_default = false WHERE user_id = ?`,
           [userId]
         )
       }
       
-      const result = await client.query(
+      const id = (await import('crypto')).randomUUID()
+      await client.query(
         `INSERT INTO payment_methods 
-         (user_id, type, provider, provider_token, last_four, brand, expiry_month, expiry_year, holder_name, is_default, billing_address_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         RETURNING *`,
-        [userId, type, provider, providerToken, lastFour, brand, expiryMonth, expiryYear, holderName, isDefault || false, billingAddressId]
+         (id, user_id, type, provider, provider_token, last_four, brand, expiry_month, expiry_year, holder_name, is_default, billing_address_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, userId, type, provider, providerToken, lastFour, brand, expiryMonth, expiryYear, holderName, isDefault || false, billingAddressId]
       )
       
-      await client.query('COMMIT')
+      await client.commit()
+      
+      const result = await client.query('SELECT * FROM payment_methods WHERE id = ?', [id])
       
       res.status(201).json({
         message: 'Payment method added successfully',
         data: result.rows[0]
       })
     } catch (e) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw e
     } finally {
       client.release()
@@ -71,7 +73,7 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response, next
     const { id } = req.params
     
     const result = await pool.query(
-      `DELETE FROM payment_methods WHERE id = $1 AND user_id = $2 RETURNING *`,
+      `DELETE FROM payment_methods WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     

@@ -35,7 +35,7 @@ interface LowStockItem {
 export class InventoryService {
   async getStock(sku: string): Promise<number> {
     const result = await pool.query(
-      'SELECT stock_quantity FROM product_variants WHERE sku = $1',
+      'SELECT stock_quantity FROM product_variants WHERE sku = ?',
       [sku]
     )
 
@@ -47,18 +47,19 @@ export class InventoryService {
   }
 
   async updateStock(sku: string, quantity: number, operation: 'set' | 'increment' | 'decrement' = 'set'): Promise<void> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       // Get current stock
-      const currentStock = await client.query(
-        'SELECT stock_quantity FROM product_variants WHERE sku = $1 FOR UPDATE',
+      const currentStockResult = await client.query(
+        'SELECT stock_quantity FROM product_variants WHERE sku = ? FOR UPDATE',
         [sku]
       )
+      const currentStock = currentStockResult[0] as any[]
 
-      if (currentStock.rows.length === 0) {
+      if (currentStock.length === 0) {
         throw new Error('SKU not found')
       }
 
@@ -69,24 +70,26 @@ export class InventoryService {
           newQuantity = quantity
           break
         case 'increment':
-          newQuantity = currentStock.rows[0].stock_quantity + quantity
+          newQuantity = currentStock[0].stock_quantity + quantity
           break
         case 'decrement':
-          newQuantity = currentStock.rows[0].stock_quantity - quantity
+          newQuantity = currentStock[0].stock_quantity - quantity
           if (newQuantity < 0) {
             throw new Error('Insufficient stock')
           }
           break
+        default:
+          newQuantity = currentStock[0].stock_quantity
       }
 
       await client.query(
-        'UPDATE product_variants SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE sku = $2',
+        'UPDATE product_variants SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE sku = ?',
         [newQuantity, sku]
       )
 
-      await client.query('COMMIT')
+      await client.commit()
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -94,18 +97,32 @@ export class InventoryService {
   }
 
   async bulkUpdateStock(updates: StockUpdate[]): Promise<void> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       for (const update of updates) {
-        await this.updateStock(update.sku, update.quantity, update.operation)
+        // Reuse inner logic or call method but pass client if needed. 
+        // For simplicity here, we re-implement the logic within the transaction.
+        const [current] = await client.query('SELECT stock_quantity FROM product_variants WHERE sku = ? FOR UPDATE', [update.sku])
+        const rows = current as any[]
+        if (rows.length === 0) throw new Error(`SKU ${update.sku} not found`)
+        
+        let n: number
+        if (update.operation === 'set') n = update.quantity
+        else if (update.operation === 'increment') n = rows[0].stock_quantity + update.quantity
+        else {
+          n = rows[0].stock_quantity - update.quantity
+          if (n < 0) throw new Error(`Insufficient stock for ${update.sku}`)
+        }
+        
+        await client.query('UPDATE product_variants SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE sku = ?', [n, update.sku])
       }
 
-      await client.query('COMMIT')
+      await client.commit()
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -113,37 +130,38 @@ export class InventoryService {
   }
 
   async reserveStock(sku: string, quantity: number): Promise<boolean> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
-      const result = await client.query(
-        'SELECT stock_quantity FROM product_variants WHERE sku = $1 FOR UPDATE',
+      const [rows] = await client.query(
+        'SELECT stock_quantity FROM product_variants WHERE sku = ? FOR UPDATE',
         [sku]
       )
+      const result = rows as any[]
 
-      if (result.rows.length === 0) {
-        await client.query('ROLLBACK')
+      if (result.length === 0) {
+        await client.rollback()
         return false
       }
 
-      const currentStock = result.rows[0].stock_quantity
+      const currentStock = result[0].stock_quantity
 
       if (currentStock < quantity) {
-        await client.query('ROLLBACK')
+        await client.rollback()
         return false
       }
 
       await client.query(
-        'UPDATE product_variants SET stock_quantity = stock_quantity - $1, updated_at = CURRENT_TIMESTAMP WHERE sku = $2',
+        'UPDATE product_variants SET stock_quantity = stock_quantity - ?, updated_at = CURRENT_TIMESTAMP WHERE sku = ?',
         [quantity, sku]
       )
 
-      await client.query('COMMIT')
+      await client.commit()
       return true
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -152,7 +170,7 @@ export class InventoryService {
 
   async releaseStock(sku: string, quantity: number): Promise<void> {
     await pool.query(
-      'UPDATE product_variants SET stock_quantity = stock_quantity + $1, updated_at = CURRENT_TIMESTAMP WHERE sku = $2',
+      'UPDATE product_variants SET stock_quantity = stock_quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE sku = ?',
       [quantity, sku]
     )
   }
@@ -163,7 +181,7 @@ export class InventoryService {
     for (const item of items) {
       if (item.variantId) {
         const result = await pool.query(
-          'SELECT sku, stock_quantity FROM product_variants WHERE id = $1',
+          'SELECT sku, stock_quantity FROM product_variants WHERE id = ?',
           [item.variantId]
         )
 
@@ -197,7 +215,7 @@ export class InventoryService {
                 p.name as product_name
          FROM product_variants pv
          JOIN products p ON pv.product_id = p.id
-         WHERE pv.stock_quantity <= $1
+         WHERE pv.stock_quantity <= ?
          ORDER BY pv.stock_quantity ASC`
       : `SELECT pv.id, pv.product_id, pv.sku, pv.variant_name, pv.stock_quantity, pv.low_stock_threshold,
                 p.name as product_name
@@ -210,7 +228,7 @@ export class InventoryService {
       ? await pool.query(query, [threshold])
       : await pool.query(query)
 
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       productId: row.product_id,
       sku: row.sku,
@@ -231,7 +249,7 @@ export class InventoryService {
        ORDER BY pv.updated_at DESC`
     )
 
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       productId: row.product_id,
       sku: row.sku,
@@ -273,34 +291,35 @@ export class InventoryService {
   }
 
   async reserveCartItems(items: CartItem[]): Promise<boolean> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       for (const item of items) {
         if (item.variantId) {
-          const result = await client.query(
-            'SELECT sku, stock_quantity FROM product_variants WHERE id = $1 FOR UPDATE',
+          const [rows] = await client.query(
+            'SELECT sku, stock_quantity FROM product_variants WHERE id = ? FOR UPDATE',
             [item.variantId]
           )
+          const result = rows as any[]
 
-          if (result.rows.length === 0 || result.rows[0].stock_quantity < item.quantity) {
-            await client.query('ROLLBACK')
+          if (result.length === 0 || result[0].stock_quantity < item.quantity) {
+            await client.rollback()
             return false
           }
 
           await client.query(
-            'UPDATE product_variants SET stock_quantity = stock_quantity - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            'UPDATE product_variants SET stock_quantity = stock_quantity - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
             [item.quantity, item.variantId]
           )
         }
       }
 
-      await client.query('COMMIT')
+      await client.commit()
       return true
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -308,23 +327,23 @@ export class InventoryService {
   }
 
   async releaseCartItems(items: CartItem[]): Promise<void> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       for (const item of items) {
         if (item.variantId) {
           await client.query(
-            'UPDATE product_variants SET stock_quantity = stock_quantity + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            'UPDATE product_variants SET stock_quantity = stock_quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
             [item.quantity, item.variantId]
           )
         }
       }
 
-      await client.query('COMMIT')
+      await client.commit()
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()

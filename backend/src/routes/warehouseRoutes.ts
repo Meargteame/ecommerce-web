@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import { AuthRequest, authenticate, authorize } from '../middleware/auth'
 import pool from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import { v4 as uuidv4 } from 'uuid'
+import crypto from 'crypto'
 
 const router = Router()
 
@@ -16,7 +16,7 @@ router.get('/', authenticate, authorize('seller'), async (req: AuthRequest, res:
         (SELECT COUNT(*) FROM warehouse_inventory WHERE warehouse_id = sw.id) as product_count,
         (SELECT COUNT(*) FROM warehouse_inventory WHERE warehouse_id = sw.id AND quantity_available <= reorder_point) as low_stock_count
       FROM seller_warehouses sw
-      WHERE sw.seller_id = (SELECT id FROM seller_profiles WHERE user_id = $1)
+      WHERE sw.seller_id = (SELECT id FROM seller_profiles WHERE user_id = ?)
       ORDER BY sw.is_default DESC, sw.created_at DESC`,
       [sellerId]
     )
@@ -40,7 +40,7 @@ router.post('/', authenticate, authorize('seller'), async (req: AuthRequest, res
     
     // Get seller profile id
     const sellerProfile = await pool.query(
-      `SELECT id FROM seller_profiles WHERE user_id = $1`,
+      `SELECT id FROM seller_profiles WHERE user_id = ?`,
       [sellerId]
     )
     
@@ -53,33 +53,35 @@ router.post('/', authenticate, authorize('seller'), async (req: AuthRequest, res
     // If setting as default, unset other defaults
     if (isDefault) {
       await pool.query(
-        `UPDATE seller_warehouses SET is_default = false WHERE seller_id = $1`,
+        `UPDATE seller_warehouses SET is_default = false WHERE seller_id = ?`,
         [sellerProfileId]
       )
     }
     
-    const result = await pool.query(
+    const id = crypto.randomUUID()
+    await pool.query(
       `INSERT INTO seller_warehouses (
-        seller_id, name, code, is_default, address_line1, address_line2,
+        id, seller_id, name, code, is_default, address_line1, address_line2,
         city, state, postal_code, country, phone, email, contact_name,
         handling_time, cutoff_time, operates_weekends, operates_holidays,
         latitude, longitude
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-      RETURNING *`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        sellerProfileId, name, code || `WH-${Date.now()}`, isDefault || false,
+        id, sellerProfileId, name, code || `WH-${Date.now()}`, isDefault || false,
         addressLine1, addressLine2, city, state, postalCode, country || 'US',
         phone, email, contactName, handlingTime || 1, cutoffTime || '14:00',
         operatesWeekends || false, operatesHolidays || false, latitude, longitude
       ]
     )
     
+    const result = await pool.query('SELECT * FROM seller_warehouses WHERE id = ?', [id])
+    
     res.status(201).json({
       message: 'Warehouse created',
       data: result.rows[0]
     })
   } catch (error) {
-    if ((error as any).code === '23505') {
+    if ((error as any).code === 'ER_DUP_ENTRY' || (error as any).code === '23505') {
       throw new AppError('Warehouse code already exists', 400)
     }
     throw new AppError('Failed to create warehouse', 500)
@@ -96,7 +98,7 @@ router.get('/:id', authenticate, authorize('seller'), async (req: AuthRequest, r
     const warehouseResult = await pool.query(
       `SELECT sw.* FROM seller_warehouses sw
        JOIN seller_profiles sp ON sp.id = sw.seller_id
-       WHERE sw.id = $1 AND sp.user_id = $2`,
+       WHERE sw.id = ? AND sp.user_id = ?`,
       [id, sellerId]
     )
     
@@ -113,7 +115,7 @@ router.get('/:id', authenticate, authorize('seller'), async (req: AuthRequest, r
       FROM warehouse_inventory wi
       JOIN products p ON p.id = wi.product_id
       LEFT JOIN product_variants pv ON pv.id = wi.variant_id
-      WHERE wi.warehouse_id = $1
+      WHERE wi.warehouse_id = ?
       ORDER BY wi.quantity_available ASC
       LIMIT 100`,
       [id]
@@ -142,7 +144,7 @@ router.put('/:id', authenticate, authorize('seller'), async (req: AuthRequest, r
     const checkResult = await pool.query(
       `SELECT sw.id FROM seller_warehouses sw
        JOIN seller_profiles sp ON sp.id = sw.seller_id
-       WHERE sw.id = $1 AND sp.user_id = $2`,
+       WHERE sw.id = ? AND sp.user_id = ?`,
       [id, sellerId]
     )
     
@@ -152,13 +154,14 @@ router.put('/:id', authenticate, authorize('seller'), async (req: AuthRequest, r
     
     // Handle default warehouse change
     if (updateData.isDefault) {
-      const sellerProfileId = (await pool.query(
-        `SELECT id FROM seller_profiles WHERE user_id = $1`,
+      const sellerProfileResult = await pool.query(
+        `SELECT id FROM seller_profiles WHERE user_id = ?`,
         [sellerId]
-      )).rows[0].id
+      )
+      const sellerProfileId = sellerProfileResult.rows[0].id
       
       await pool.query(
-        `UPDATE seller_warehouses SET is_default = false WHERE seller_id = $1 AND id != $2`,
+        `UPDATE seller_warehouses SET is_default = false WHERE seller_id = ? AND id != ?`,
         [sellerProfileId, id]
       )
     }
@@ -172,12 +175,11 @@ router.put('/:id', authenticate, authorize('seller'), async (req: AuthRequest, r
     
     const updates: string[] = []
     const values: any[] = []
-    let paramIndex = 1
     
     for (const [key, value] of Object.entries(updateData)) {
       const dbField = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
       if (allowedFields.includes(dbField)) {
-        updates.push(`${dbField} = $${paramIndex++}`)
+        updates.push(`${dbField} = ?`)
         values.push(value)
       }
     }
@@ -188,13 +190,13 @@ router.put('/:id', authenticate, authorize('seller'), async (req: AuthRequest, r
     
     values.push(id)
     
-    const result = await pool.query(
+    await pool.query(
       `UPDATE seller_warehouses SET ${updates.join(', ')}, updated_at = NOW()
-       WHERE id = $${paramIndex}
-       RETURNING *`,
+       WHERE id = ?`,
       values
     )
     
+    const result = await pool.query('SELECT * FROM seller_warehouses WHERE id = ?', [id])
     res.json({ message: 'Warehouse updated', data: result.rows[0] })
   } catch (error) {
     if (error instanceof AppError) throw error
@@ -214,7 +216,7 @@ router.delete('/:id', authenticate, authorize('seller'), async (req: AuthRequest
        FROM warehouse_inventory wi
        JOIN seller_warehouses sw ON sw.id = wi.warehouse_id
        JOIN seller_profiles sp ON sp.id = sw.seller_id
-       WHERE wi.warehouse_id = $1 AND sp.user_id = $2`,
+       WHERE wi.warehouse_id = ? AND sp.user_id = ?`,
       [id, sellerId]
     )
     
@@ -226,7 +228,7 @@ router.delete('/:id', authenticate, authorize('seller'), async (req: AuthRequest
     const defaultCheck = await pool.query(
       `SELECT is_default FROM seller_warehouses sw
        JOIN seller_profiles sp ON sp.id = sw.seller_id
-       WHERE sw.id = $1 AND sp.user_id = $2`,
+       WHERE sw.id = ? AND sp.user_id = ?`,
       [id, sellerId]
     )
     
@@ -235,14 +237,13 @@ router.delete('/:id', authenticate, authorize('seller'), async (req: AuthRequest
     }
     
     const result = await pool.query(
-      `DELETE FROM seller_warehouses sw
-       USING seller_profiles sp
-       WHERE sw.id = $1 AND sw.seller_id = sp.id AND sp.user_id = $2
-       RETURNING sw.*`,
+      `DELETE sw FROM seller_warehouses sw
+       INNER JOIN seller_profiles sp ON sw.seller_id = sp.id
+       WHERE sw.id = ? AND sp.user_id = ?`,
       [id, sellerId]
     )
     
-    if (result.rows.length === 0) {
+    if (result.rowCount === 0) {
       throw new AppError('Warehouse not found', 404)
     }
     
@@ -265,7 +266,7 @@ router.put('/:id/inventory/:productId', authenticate, authorize('seller'), async
       `SELECT 1 FROM seller_warehouses sw
        JOIN seller_profiles sp ON sp.id = sw.seller_id
        JOIN products p ON p.seller_id = sp.user_id
-       WHERE sw.id = $1 AND sp.user_id = $2 AND p.id = $3`,
+       WHERE sw.id = ? AND sp.user_id = ? AND p.id = ?`,
       [id, sellerId, productId]
     )
     
@@ -273,21 +274,22 @@ router.put('/:id/inventory/:productId', authenticate, authorize('seller'), async
       throw new AppError('Warehouse or product not found', 404)
     }
     
-    const result = await pool.query(
+    const invId = crypto.randomUUID()
+    await pool.query(
       `INSERT INTO warehouse_inventory (
-        warehouse_id, product_id, variant_id, quantity_available,
+        id, warehouse_id, product_id, variant_id, quantity_available,
         reorder_point, reorder_quantity, location_code
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-      ON CONFLICT (warehouse_id, product_id, variant_id)
-      DO UPDATE SET 
-        quantity_available = EXCLUDED.quantity_available,
-        reorder_point = COALESCE(EXCLUDED.reorder_point, warehouse_inventory.reorder_point),
-        reorder_quantity = COALESCE(EXCLUDED.reorder_quantity, warehouse_inventory.reorder_quantity),
-        location_code = COALESCE(EXCLUDED.location_code, warehouse_inventory.location_code),
-        updated_at = NOW()
-      RETURNING *`,
-      [id, productId, variantId || null, quantity, reorderPoint, reorderQuantity, locationCode]
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE 
+        quantity_available = VALUES(quantity_available),
+        reorder_point = COALESCE(VALUES(reorder_point), reorder_point),
+        reorder_quantity = COALESCE(VALUES(reorder_quantity), reorder_quantity),
+        location_code = COALESCE(VALUES(location_code), location_code),
+        updated_at = NOW()`,
+      [invId, id, productId, variantId || null, quantity, reorderPoint, reorderQuantity, locationCode]
     )
+    
+    const result = await pool.query('SELECT * FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ? AND variant_id <=> ?', [id, productId, variantId || null])
     
     res.json({ message: 'Inventory updated', data: result.rows[0] })
   } catch (error) {
@@ -298,10 +300,10 @@ router.put('/:id/inventory/:productId', authenticate, authorize('seller'), async
 
 // POST /api/seller/warehouses/:id/transfer - Transfer inventory between warehouses
 router.post('/:id/transfer', authenticate, authorize('seller'), async (req: AuthRequest, res: Response) => {
-  const client = await pool.connect()
+  const client = await pool.getConnection()
   
   try {
-    await client.query('BEGIN')
+    await client.beginTransaction()
     
     const sellerId = req.user!.userId
     const { id } = req.params
@@ -311,11 +313,11 @@ router.post('/:id/transfer', authenticate, authorize('seller'), async (req: Auth
     const warehouseCheck = await client.query(
       `SELECT sw.id FROM seller_warehouses sw
        JOIN seller_profiles sp ON sp.id = sw.seller_id
-       WHERE sw.id IN ($1, $2) AND sp.user_id = $3`,
+       WHERE sw.id IN (?, ?) AND sp.user_id = ?`,
       [id, targetWarehouseId, sellerId]
     )
     
-    if (warehouseCheck.rows.length !== 2) {
+    if ((warehouseCheck as any).rows.length !== 2) {
       throw new AppError('One or more warehouses not found', 404)
     }
     
@@ -324,39 +326,39 @@ router.post('/:id/transfer', authenticate, authorize('seller'), async (req: Auth
       // Check source has enough quantity
       const sourceCheck = await client.query(
         `SELECT quantity_available FROM warehouse_inventory
-         WHERE warehouse_id = $1 AND product_id = $2 AND variant_id = $3`,
-        [id, item.productId, item.variantId]
+         WHERE warehouse_id = ? AND product_id = ? AND variant_id <=> ?`,
+        [id, item.productId, item.variantId || null]
       )
       
-      if (sourceCheck.rows.length === 0 || sourceCheck.rows[0].quantity_available < item.quantity) {
+      if ((sourceCheck as any).rows.length === 0 || (sourceCheck as any).rows[0].quantity_available < item.quantity) {
         throw new AppError(`Insufficient quantity for product ${item.productId}`, 400)
       }
       
       // Decrease source
       await client.query(
         `UPDATE warehouse_inventory 
-         SET quantity_available = quantity_available - $1,
+         SET quantity_available = quantity_available - ?,
              updated_at = NOW()
-         WHERE warehouse_id = $2 AND product_id = $3 AND variant_id = $4`,
-        [item.quantity, id, item.productId, item.variantId]
+         WHERE warehouse_id = ? AND product_id = ? AND variant_id <=> ?`,
+        [item.quantity, id, item.productId, item.variantId || null]
       )
       
       // Increase target
+      const invId = crypto.randomUUID()
       await client.query(
-        `INSERT INTO warehouse_inventory (warehouse_id, product_id, variant_id, quantity_available)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (warehouse_id, product_id, variant_id)
-         DO UPDATE SET quantity_available = warehouse_inventory.quantity_available + EXCLUDED.quantity_available,
+        `INSERT INTO warehouse_inventory (id, warehouse_id, product_id, variant_id, quantity_available)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE quantity_available = warehouse_inventory.quantity_available + VALUES(quantity_available),
                       updated_at = NOW()`,
-        [targetWarehouseId, item.productId, item.variantId, item.quantity]
+        [invId, targetWarehouseId, item.productId, item.variantId || null, item.quantity]
       )
     }
     
-    await client.query('COMMIT')
+    await client.commit()
     
     res.json({ message: 'Inventory transferred successfully' })
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.rollback()
     if (error instanceof AppError) throw error
     throw new AppError('Failed to transfer inventory', 500)
   } finally {
@@ -380,7 +382,7 @@ router.get('/:id/inventory/low-stock', authenticate, authorize('seller'), async 
       LEFT JOIN product_variants pv ON pv.id = wi.variant_id
       JOIN seller_warehouses sw ON sw.id = wi.warehouse_id
       JOIN seller_profiles sp ON sp.id = sw.seller_id
-      WHERE wi.warehouse_id = $1 AND sp.user_id = $2
+      WHERE wi.warehouse_id = ? AND sp.user_id = ?
         AND wi.quantity_available <= wi.reorder_point
       ORDER BY wi.quantity_available ASC`,
       [id, sellerId]
@@ -399,12 +401,14 @@ router.get('/:id/inventory/history', authenticate, authorize('seller'), async (r
     const { id } = req.params
     const { limit = 50, offset = 0 } = req.query
     
+    const limitNum = parseInt(limit as string)
+    const offsetNum = parseInt(offset as string)
     const result = await pool.query(
       `SELECT * FROM inventory_transactions
-       WHERE warehouse_id = $1
+       WHERE warehouse_id = ?
        ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [id, limit, offset]
+       LIMIT ? OFFSET ?`,
+      [id, limitNum, offsetNum]
     )
     
     res.json({ data: result.rows })

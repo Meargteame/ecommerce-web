@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { AuthRequest, authenticate, optionalAuth } from '../middleware/auth'
 import pool from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import crypto from 'crypto'
 
 const router = Router()
 
@@ -14,17 +15,20 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     
     const result = await pool.query(
       `SELECT sl.*, 
-        (SELECT json_agg(json_build_object(
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT(
           'id', p.id, 'name', p.name, 'slug', p.slug, 'base_price', p.base_price,
           'image', (SELECT image_url FROM product_images WHERE product_id = p.id LIMIT 1)
         ))
-        FROM shopping_list_items sli
-        JOIN products p ON p.id = sli.product_id
-        WHERE sli.list_id = sl.id
-        LIMIT 4
+        FROM (
+          SELECT p.id, p.name, p.slug, p.base_price, sli.list_id
+          FROM shopping_list_items sli
+          JOIN products p ON p.id = sli.product_id
+          WHERE sli.list_id = sl.id
+          LIMIT 4
+        ) p
         ) as preview_items
       FROM shopping_lists sl
-      WHERE sl.user_id = $1
+      WHERE sl.user_id = ?
       ORDER BY sl.is_default DESC, sl.created_at DESC`,
       [userId]
     )
@@ -42,21 +46,23 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     const { name, description, isPublic } = req.body
     
     // Generate share token if public
-    const shareToken = isPublic ? require('crypto').randomBytes(32).toString('hex') : null
+    const shareToken = isPublic ? crypto.randomBytes(32).toString('hex') : null
     
-    const result = await pool.query(
-      `INSERT INTO shopping_lists (user_id, name, description, is_public, share_token)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [userId, name, description, isPublic || false, shareToken]
+    const id = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO shopping_lists (id, user_id, name, description, is_public, share_token)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, userId, name, description, isPublic || false, shareToken]
     )
+    
+    const result = await pool.query('SELECT * FROM shopping_lists WHERE id = ?', [id])
     
     res.status(201).json({ 
       message: 'Shopping list created',
-      data: result.rows[0] 
+      data: result.rows[0]
     })
   } catch (error) {
-    if ((error as any).code === '23505') {
+    if ((error as any).code === 'ER_DUP_ENTRY' || (error as any).code === '23505') {
       throw new AppError('A list with this name already exists', 400)
     }
     throw new AppError('Failed to create shopping list', 500)
@@ -71,7 +77,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     
     // Get list
     const listResult = await pool.query(
-      `SELECT * FROM shopping_lists WHERE id = $1 AND user_id = $2`,
+      `SELECT * FROM shopping_lists WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
@@ -90,7 +96,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       FROM shopping_list_items sli
       JOIN products p ON p.id = sli.product_id
       LEFT JOIN product_variants pv ON pv.id = sli.variant_id
-      WHERE sli.list_id = $1
+      WHERE sli.list_id = ?
       ORDER BY sli.priority DESC, sli.added_at DESC`,
       [id]
     )
@@ -114,16 +120,17 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const { id } = req.params
     const { name, description, isPublic } = req.body
     
-    const result = await pool.query(
+    await pool.query(
       `UPDATE shopping_lists 
-       SET name = COALESCE($1, name),
-           description = COALESCE($2, description),
-           is_public = COALESCE($3, is_public),
+       SET name = COALESCE(?, name),
+           description = COALESCE(?, description),
+           is_public = COALESCE(?, is_public),
            updated_at = NOW()
-       WHERE id = $4 AND user_id = $5
-       RETURNING *`,
+       WHERE id = ? AND user_id = ?`,
       [name, description, isPublic, id, userId]
     )
+    
+    const result = await pool.query('SELECT * FROM shopping_lists WHERE id = ? AND user_id = ?', [id, userId])
     
     if (result.rows.length === 0) {
       throw new AppError('Shopping list not found', 404)
@@ -143,7 +150,7 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     
     // Check if it's the default list
     const checkResult = await pool.query(
-      `SELECT is_default FROM shopping_lists WHERE id = $1 AND user_id = $2`,
+      `SELECT is_default FROM shopping_lists WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
@@ -156,7 +163,7 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     }
     
     await pool.query(
-      `DELETE FROM shopping_lists WHERE id = $1 AND user_id = $2`,
+      `DELETE FROM shopping_lists WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
@@ -176,7 +183,7 @@ router.post('/:id/items', authenticate, async (req: AuthRequest, res: Response) 
     
     // Verify list belongs to user
     const listCheck = await pool.query(
-      `SELECT id FROM shopping_lists WHERE id = $1 AND user_id = $2`,
+      `SELECT id FROM shopping_lists WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
@@ -184,16 +191,17 @@ router.post('/:id/items', authenticate, async (req: AuthRequest, res: Response) 
       throw new AppError('Shopping list not found', 404)
     }
     
-    const result = await pool.query(
-      `INSERT INTO shopping_list_items (list_id, product_id, variant_id, quantity, notes, priority)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (list_id, product_id, variant_id) 
-       DO UPDATE SET quantity = EXCLUDED.quantity, notes = EXCLUDED.notes, priority = EXCLUDED.priority
-       RETURNING *`,
-      [id, productId, variantId || null, quantity || 1, notes, priority || 0]
+    const itemId = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO shopping_list_items (id, list_id, product_id, variant_id, quantity, notes, priority)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), notes = VALUES(notes), priority = VALUES(priority)`,
+      [itemId, id, productId, variantId || null, quantity || 1, notes, priority || 0]
     )
     
-    res.status(201).json({ message: 'Item added to list', data: result.rows[0] })
+    const finalResult = await pool.query('SELECT * FROM shopping_list_items WHERE list_id = ? AND product_id = ? AND variant_id <=> ?', [id, productId, variantId || null])
+    
+    res.status(201).json({ message: 'Item added to list', data: finalResult.rows[0] })
   } catch (error) {
     throw new AppError('Failed to add item to list', 500)
   }
@@ -207,7 +215,7 @@ router.delete('/:id/items/:itemId', authenticate, async (req: AuthRequest, res: 
     
     // Verify list belongs to user
     const listCheck = await pool.query(
-      `SELECT id FROM shopping_lists WHERE id = $1 AND user_id = $2`,
+      `SELECT id FROM shopping_lists WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
@@ -215,13 +223,18 @@ router.delete('/:id/items/:itemId', authenticate, async (req: AuthRequest, res: 
       throw new AppError('Shopping list not found', 404)
     }
     
-    await pool.query(
-      `DELETE FROM shopping_list_items WHERE id = $1 AND list_id = $2`,
+    const result = await pool.query(
+      `DELETE FROM shopping_list_items WHERE id = ? AND list_id = ?`,
       [itemId, id]
     )
     
+    if (result.rowCount === 0) {
+      throw new AppError('Item not found in this list', 404)
+    }
+    
     res.json({ message: 'Item removed from list' })
   } catch (error) {
+    if (error instanceof AppError) throw error
     throw new AppError('Failed to remove item', 500)
   }
 })
@@ -235,7 +248,7 @@ router.post('/:id/items/:itemId/move', authenticate, async (req: AuthRequest, re
     
     // Verify both lists belong to user
     const listsCheck = await pool.query(
-      `SELECT id FROM shopping_lists WHERE id IN ($1, $2) AND user_id = $3`,
+      `SELECT id FROM shopping_lists WHERE id IN (?, ?) AND user_id = ?`,
       [id, targetListId, userId]
     )
     
@@ -244,13 +257,18 @@ router.post('/:id/items/:itemId/move', authenticate, async (req: AuthRequest, re
     }
     
     // Move item
-    await pool.query(
-      `UPDATE shopping_list_items SET list_id = $1 WHERE id = $2 AND list_id = $3`,
+    const result = await pool.query(
+      `UPDATE shopping_list_items SET list_id = ? WHERE id = ? AND list_id = ?`,
       [targetListId, itemId, id]
     )
     
+    if (result.rowCount === 0) {
+      throw new AppError('Item not found in source list', 404)
+    }
+    
     res.json({ message: 'Item moved to target list' })
   } catch (error) {
+    if (error instanceof AppError) throw error
     throw new AppError('Failed to move item', 500)
   }
 })
@@ -264,7 +282,7 @@ router.get('/public/:token', async (req, res) => {
       `SELECT sl.*, u.first_name, u.last_name
        FROM shopping_lists sl
        JOIN users u ON u.id = sl.user_id
-       WHERE sl.share_token = $1 AND sl.is_public = true`,
+       WHERE sl.share_token = ? AND sl.is_public = true`,
       [token]
     )
     
@@ -277,7 +295,7 @@ router.get('/public/:token', async (req, res) => {
         (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = true LIMIT 1) as image
       FROM shopping_list_items sli
       JOIN products p ON p.id = sli.product_id
-      WHERE sli.list_id = $1`,
+      WHERE sli.list_id = ?`,
       [listResult.rows[0].id]
     )
     
@@ -300,32 +318,44 @@ router.post('/public/:token/copy', authenticate, async (req: AuthRequest, res: R
     const { token } = req.params
     
     // Get public list
-    const publicList = await pool.query(
-      `SELECT * FROM shopping_lists WHERE share_token = $1 AND is_public = true`,
+    const publicListResult = await pool.query(
+      `SELECT * FROM shopping_lists WHERE share_token = ? AND is_public = true`,
       [token]
     )
     
-    if (publicList.rows.length === 0) {
+    if (publicListResult.rows.length === 0) {
       throw new AppError('List not found', 404)
     }
     
+    const publicList = publicListResult.rows[0]
+    
     // Create copy
-    const newList = await pool.query(
-      `INSERT INTO shopping_lists (user_id, name, description)
-       VALUES ($1, $2 || ' (Copy)', $3)
-       RETURNING *`,
-      [userId, publicList.rows[0].name, publicList.rows[0].description]
+    const newListId = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO shopping_lists (id, user_id, name, description)
+       VALUES (?, ?, CONCAT(?, ' (Copy)'), ?)`,
+      [newListId, userId, publicList.name, publicList.description]
     )
     
     // Copy items
-    await pool.query(
-      `INSERT INTO shopping_list_items (list_id, product_id, variant_id, quantity, notes, priority)
-       SELECT $1, product_id, variant_id, quantity, notes, priority
-       FROM shopping_list_items WHERE list_id = $2`,
-      [newList.rows[0].id, publicList.rows[0].id]
+    const itemsToCopy = await pool.query(
+      `SELECT product_id, variant_id, quantity, notes, priority
+       FROM shopping_list_items WHERE list_id = ?`,
+      [publicList.id]
     )
     
-    res.json({ message: 'List copied to your account', data: newList.rows[0] })
+    for (const item of itemsToCopy.rows) {
+      const newItemId = crypto.randomUUID()
+      await pool.query(
+        `INSERT INTO shopping_list_items (id, list_id, product_id, variant_id, quantity, notes, priority)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [newItemId, newListId, item.product_id, item.variant_id, item.quantity, item.notes, item.priority]
+      )
+    }
+    
+    const finalNewList = await pool.query('SELECT * FROM shopping_lists WHERE id = ?', [newListId])
+    
+    res.json({ message: 'List copied to your account', data: finalNewList.rows[0] })
   } catch (error) {
     throw new AppError('Failed to copy list', 500)
   }

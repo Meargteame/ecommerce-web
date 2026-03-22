@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { AuthRequest, authenticate, authorize } from '../middleware/auth'
 import pool from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import crypto from 'crypto'
 
 const router = Router()
 
@@ -9,10 +10,10 @@ const router = Router()
 
 // POST /api/gift-cards - Purchase gift card
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
-  const client = await pool.connect()
+  const client = await pool.getConnection()
   
   try {
-    await client.query('BEGIN')
+    await client.beginTransaction()
     
     const userId = req.user!.userId
     const { amount, recipientEmail, recipientName, message, type = 'digital', expiresInDays = 365 } = req.body
@@ -25,15 +26,14 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     }
     
     // Generate unique code
-    const crypto = require('crypto')
     let code: string = ''
     let codeExists = true
     let attempts = 0
     
     while (codeExists && attempts < 10) {
       code = 'GC-' + crypto.randomBytes(8).toString('base64').toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 16)
-      const existing = await client.query('SELECT id FROM gift_cards WHERE code = $1', [code])
-      codeExists = existing.rows.length > 0
+      const existing = await client.query('SELECT id FROM gift_cards WHERE code = ?', [code])
+      codeExists = (existing as any).rows.length > 0
       attempts++
     }
     
@@ -43,26 +43,29 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     
     // Look up recipient if they have an account
     const recipientResult = await client.query(
-      'SELECT id FROM users WHERE email = $1',
+      'SELECT id FROM users WHERE email = ?',
       [recipientEmail]
     )
-    const recipientId = recipientResult.rows[0]?.id
+    const recipientId = (recipientResult as any).rows[0]?.id
     
     // Create gift card
-    const giftCardResult = await client.query(
+    const id = crypto.randomUUID()
+    await client.query(
       `INSERT INTO gift_cards (
-        code, type, initial_balance, current_balance, sender_id, 
+        id, code, type, initial_balance, current_balance, sender_id, 
         recipient_id, recipient_email, recipient_name, message, expires_at
-      ) VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, NOW() + INTERVAL '${expiresInDays} days')
-      RETURNING *`,
-      [code, type, amount, userId, recipientId || null, recipientEmail, recipientName, message]
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))`,
+      [id, code, type, amount, amount, userId, recipientId || null, recipientEmail, recipientName, message, expiresInDays]
     )
     
+    const giftCardResult = await client.query('SELECT * FROM gift_cards WHERE id = ?', [id])
+    
     // Create transaction record
+    const transactionId = crypto.randomUUID()
     await client.query(
-      `INSERT INTO gift_card_transactions (gift_card_id, type, amount, description)
-       VALUES ($1, 'purchase', $2, 'Gift card purchased')`,
-      [giftCardResult.rows[0].id, amount]
+      `INSERT INTO gift_card_transactions (id, gift_card_id, type, amount, description)
+       VALUES (?, ?, 'purchase', ?, 'Gift card purchased')`,
+      [transactionId, id, amount]
     )
     
     // Using email service logic abstractly for recipient to remove the TODO
@@ -79,14 +82,14 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }
     
-    await client.query('COMMIT')
+    await client.commit()
     
     res.status(201).json({
       message: 'Gift card created successfully',
       data: giftCardResult.rows[0]
     })
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.rollback()
     if (error instanceof AppError) throw error
     throw new AppError('Failed to create gift card', 500)
   } finally {
@@ -105,11 +108,11 @@ router.get('/my-cards', authenticate, async (req: AuthRequest, res: Response) =>
         u.first_name as sender_first_name, u.last_name as sender_last_name
       FROM gift_cards gc
       LEFT JOIN users u ON u.id = gc.sender_id
-      WHERE gc.recipient_id = $1 OR gc.recipient_email = (
-        SELECT email FROM users WHERE id = $1
+      WHERE gc.recipient_id = ? OR gc.recipient_email = (
+        SELECT email FROM users WHERE id = ?
       )
       ORDER BY gc.created_at DESC`,
-      [userId]
+      [userId, userId]
     )
     
     // Sent gift cards
@@ -117,12 +120,12 @@ router.get('/my-cards', authenticate, async (req: AuthRequest, res: Response) =>
       `SELECT gc.*,
         CASE 
           WHEN gc.recipient_id IS NOT NULL THEN 
-            (SELECT json_build_object('firstName', u.first_name, 'lastName', u.last_name)
+            (SELECT JSON_OBJECT('firstName', u.first_name, 'lastName', u.last_name)
              FROM users u WHERE u.id = gc.recipient_id)
-          ELSE json_build_object('email', gc.recipient_email, 'name', gc.recipient_name)
+          ELSE JSON_OBJECT('email', gc.recipient_email, 'name', gc.recipient_name)
         END as recipient
       FROM gift_cards gc
-      WHERE gc.sender_id = $1
+      WHERE gc.sender_id = ?
       ORDER BY gc.created_at DESC`,
       [userId]
     )
@@ -140,17 +143,17 @@ router.get('/my-cards', authenticate, async (req: AuthRequest, res: Response) =>
 
 // POST /api/gift-cards/redeem - Redeem gift card
 router.post('/redeem', authenticate, async (req: AuthRequest, res: Response) => {
-  const client = await pool.connect()
+  const client = await pool.getConnection()
   
   try {
-    await client.query('BEGIN')
+    await client.beginTransaction()
     
     const userId = req.user!.userId
     const { code } = req.body
     
     // Find gift card
     const cardResult = await client.query(
-      `SELECT * FROM gift_cards WHERE code = $1 AND status = 'active'`,
+      `SELECT * FROM gift_cards WHERE code = ? AND status = 'active'`,
       [code.toUpperCase().replace(/\s/g, '')]
     )
     
@@ -163,7 +166,7 @@ router.post('/redeem', authenticate, async (req: AuthRequest, res: Response) => 
     // Check if expired
     if (giftCard.expires_at && new Date(giftCard.expires_at) < new Date()) {
       await client.query(
-        `UPDATE gift_cards SET status = 'expired' WHERE id = $1`,
+        `UPDATE gift_cards SET status = 'expired' WHERE id = ?`,
         [giftCard.id]
       )
       throw new AppError('Gift card has expired', 400)
@@ -177,27 +180,28 @@ router.post('/redeem', authenticate, async (req: AuthRequest, res: Response) => 
     // Redeem gift card
     await client.query(
       `UPDATE gift_cards 
-       SET recipient_id = $1, 
+       SET recipient_id = ?, 
            status = 'redeemed',
            redeemed_at = NOW()
-       WHERE id = $2`,
+       WHERE id = ?`,
       [userId, giftCard.id]
     )
     
     // Create transaction
+    const transactionId = crypto.randomUUID()
     await client.query(
-      `INSERT INTO gift_card_transactions (gift_card_id, type, amount, description)
-       VALUES ($1, 'redemption', $2, 'Gift card redeemed')`,
-      [giftCard.id, giftCard.current_balance]
+      `INSERT INTO gift_card_transactions (id, gift_card_id, type, amount, description)
+       VALUES (?, ?, 'redemption', ?, 'Gift card redeemed')`,
+      [transactionId, giftCard.id, giftCard.current_balance]
     )
     
     // Add to user's store credit
     await client.query(
-      `UPDATE users SET gift_card_balance = COALESCE(gift_card_balance, 0) + $1 WHERE id = $2`,
+      `UPDATE users SET gift_card_balance = COALESCE(gift_card_balance, 0) + ? WHERE id = ?`,
       [giftCard.current_balance, userId]
     )
     
-    await client.query('COMMIT')
+    await client.commit()
     
     res.json({
       message: `Gift card redeemed successfully. ${giftCard.current_balance} added to your balance.`,
@@ -207,7 +211,7 @@ router.post('/redeem', authenticate, async (req: AuthRequest, res: Response) => 
       }
     })
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.rollback()
     if (error instanceof AppError) throw error
     throw new AppError('Failed to redeem gift card', 500)
   } finally {
@@ -227,7 +231,7 @@ router.get('/check-balance', async (req, res) => {
     const result = await pool.query(
       `SELECT code, current_balance, status, expires_at, 
         CASE WHEN expires_at < NOW() THEN true ELSE false END as is_expired
-      FROM gift_cards WHERE code = $1`,
+      FROM gift_cards WHERE code = ?`,
       [(code as string).toUpperCase().replace(/\s/g, '')]
     )
     
@@ -274,12 +278,14 @@ router.get('/admin/all', authenticate, authorize('admin'), async (req: AuthReque
     const params: any[] = []
     
     if (status) {
-      query += ` AND gc.status = $${params.length + 1}`
+      query += ` AND gc.status = ?`
       params.push(status)
     }
     
-    query += ` ORDER BY gc.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
-    params.push(limit, offset)
+    const limitNum = parseInt(limit as string)
+    const offsetNum = parseInt(offset as string)
+    query += ` ORDER BY gc.created_at DESC LIMIT ? OFFSET ?`
+    params.push(limitNum, offsetNum)
     
     const result = await pool.query(query, params)
     
@@ -300,16 +306,19 @@ router.get('/loyalty/points', authenticate, async (req: AuthRequest, res: Respon
     
     // Get or create loyalty record
     let loyaltyResult = await pool.query(
-      `SELECT * FROM loyalty_points WHERE user_id = $1`,
+      `SELECT * FROM loyalty_points WHERE user_id = ?`,
       [userId]
     )
     
     if (loyaltyResult.rows.length === 0) {
       // Create initial record
-      loyaltyResult = await pool.query(
-        `INSERT INTO loyalty_points (user_id) VALUES ($1) RETURNING *`,
-        [userId]
+      const id = crypto.randomUUID()
+      await pool.query(
+        `INSERT INTO loyalty_points (id, user_id) VALUES (?, ?)`,
+        [id, userId]
       )
+      const newLoyalty = await pool.query('SELECT * FROM loyalty_points WHERE id = ?', [id])
+      loyaltyResult = { rows: [ newLoyalty.rows[0] ] } as any
     }
     
     const loyalty = loyaltyResult.rows[0]
@@ -325,7 +334,7 @@ router.get('/loyalty/points', authenticate, async (req: AuthRequest, res: Respon
     // Get recent transactions
     const transactions = await pool.query(
       `SELECT * FROM loyalty_transactions 
-       WHERE user_id = $1 
+       WHERE user_id = ? 
        ORDER BY created_at DESC 
        LIMIT 20`,
       [userId]
@@ -336,7 +345,7 @@ router.get('/loyalty/points', authenticate, async (req: AuthRequest, res: Respon
     const tiers = ['bronze', 'silver', 'gold', 'platinum']
     const currentTierIndex = tiers.indexOf(loyalty.tier)
     const nextTier = tiers[currentTierIndex + 1]
-    const pointsToNextTier = nextTier ? tierThresholds[nextTier as keyof typeof tierThresholds] - loyalty.lifetime_points : 0
+    const pointsToNextTier = nextTier ? (tierThresholds as any)[nextTier] - loyalty.lifetime_points : 0
     
     res.json({
       data: {
@@ -362,24 +371,26 @@ router.get('/loyalty/transactions', authenticate, async (req: AuthRequest, res: 
     let query = `
       SELECT lt.*,
         o.order_number,
-        json_build_object(
+        JSON_OBJECT(
           'id', o.id,
           'orderNumber', o.order_number,
           'total', o.total_amount
-        ) as order
+        ) as \`order\`
       FROM loyalty_transactions lt
       LEFT JOIN orders o ON o.id = lt.order_id
-      WHERE lt.user_id = $1
+      WHERE lt.user_id = ?
     `
     const params: any[] = [userId]
     
     if (type) {
-      query += ` AND lt.type = $${params.length + 1}`
+      query += ` AND lt.type = ?`
       params.push(type)
     }
     
-    query += ` ORDER BY lt.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
-    params.push(limit, offset)
+    const limitNum = parseInt(limit as string)
+    const offsetNum = parseInt(offset as string)
+    query += ` ORDER BY lt.created_at DESC LIMIT ? OFFSET ?`
+    params.push(limitNum, offsetNum)
     
     const result = await pool.query(query, params)
     
@@ -391,17 +402,17 @@ router.get('/loyalty/transactions', authenticate, async (req: AuthRequest, res: 
 
 // POST /api/loyalty/redeem - Redeem points
 router.post('/loyalty/redeem', authenticate, async (req: AuthRequest, res: Response) => {
-  const client = await pool.connect()
+  const client = await pool.getConnection()
   
   try {
-    await client.query('BEGIN')
+    await client.beginTransaction()
     
     const userId = req.user!.userId
     const { points, description } = req.body
     
     // Check available points
     const pointsResult = await client.query(
-      `SELECT available_points FROM loyalty_points WHERE user_id = $1`,
+      `SELECT available_points FROM loyalty_points WHERE user_id = ?`,
       [userId]
     )
     
@@ -421,29 +432,30 @@ router.post('/loyalty/redeem', authenticate, async (req: AuthRequest, res: Respo
     }
     
     // Create redemption transaction
+    const transactionId = crypto.randomUUID()
     await client.query(
-      `INSERT INTO loyalty_transactions (user_id, type, points, description)
-       VALUES ($1, 'redeem', $2, $3)`,
-      [userId, -points, description || 'Points redeemed']
+      `INSERT INTO loyalty_transactions (id, user_id, type, points, description)
+       VALUES (?, ?, 'redeem', ?, ?)`,
+      [transactionId, userId, -points, description || 'Points redeemed']
     )
     
     // Update balance
     await client.query(
       `UPDATE loyalty_points 
-       SET available_points = available_points - $1,
+       SET available_points = available_points - ?,
            updated_at = NOW()
-       WHERE user_id = $2`,
+       WHERE user_id = ?`,
       [points, userId]
     )
     
     // Add store credit
     const creditValue = points * 0.01 // 1 point = $0.01
     await client.query(
-      `UPDATE users SET store_credit = COALESCE(store_credit, 0) + $1 WHERE id = $2`,
+      `UPDATE users SET store_credit = COALESCE(store_credit, 0) + ? WHERE id = ?`,
       [creditValue, userId]
     )
     
-    await client.query('COMMIT')
+    await client.commit()
     
     res.json({
       message: `${points} points redeemed for $${creditValue.toFixed(2)} store credit`,
@@ -453,7 +465,7 @@ router.post('/loyalty/redeem', authenticate, async (req: AuthRequest, res: Respo
       }
     })
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.rollback()
     if (error instanceof AppError) throw error
     throw new AppError('Failed to redeem points', 500)
   } finally {
@@ -480,7 +492,7 @@ router.get('/price-alerts', authenticate, async (req: AuthRequest, res: Response
         END as alert_status
       FROM price_alerts pa
       JOIN products p ON p.id = pa.product_id
-      WHERE pa.user_id = $1
+      WHERE pa.user_id = ?
       ORDER BY pa.created_at DESC`,
       [userId]
     )
@@ -499,7 +511,7 @@ router.post('/price-alerts', authenticate, async (req: AuthRequest, res: Respons
     
     // Get current price
     const priceResult = await pool.query(
-      `SELECT base_price FROM products WHERE id = $1`,
+      `SELECT base_price FROM products WHERE id = ?`,
       [productId]
     )
     
@@ -514,14 +526,15 @@ router.post('/price-alerts', authenticate, async (req: AuthRequest, res: Respons
       throw new AppError('Target price must be lower than current price', 400)
     }
     
-    const result = await pool.query(
-      `INSERT INTO price_alerts (user_id, product_id, target_price)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, product_id) 
-       DO UPDATE SET target_price = EXCLUDED.target_price, is_active = true, triggered_at = NULL
-       RETURNING *`,
-      [userId, productId, targetPrice]
+    const id = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO price_alerts (id, user_id, product_id, target_price)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE target_price = VALUES(target_price), is_active = true, triggered_at = NULL`,
+      [id, userId, productId, targetPrice]
     )
+    
+    const result = await pool.query('SELECT * FROM price_alerts WHERE user_id = ? AND product_id = ?', [userId, productId])
     
     res.status(201).json({
       message: 'Price alert created',
@@ -540,11 +553,11 @@ router.delete('/price-alerts/:id', authenticate, async (req: AuthRequest, res: R
     const { id } = req.params
     
     const result = await pool.query(
-      `DELETE FROM price_alerts WHERE id = $1 AND user_id = $2 RETURNING *`,
+      `DELETE FROM price_alerts WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
-    if (result.rows.length === 0) {
+    if (result.rowCount === 0) {
       throw new AppError('Price alert not found', 404)
     }
     

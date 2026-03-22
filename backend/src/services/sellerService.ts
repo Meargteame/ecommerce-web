@@ -1,456 +1,338 @@
 import pool from '../config/database'
-import productService from './productService'
+import crypto from 'crypto'
 
-interface SellerProfile {
+export interface SellerProfile {
   id: string
   userId: string
   storeName: string
   storeDescription?: string
   storeLogoUrl?: string
   storeBannerUrl?: string
-  businessAddress?: string
-  taxId?: string
-  socialFacebook?: string
-  socialInstagram?: string
-  socialTwitter?: string
-  returnPolicy?: string
-  shippingPolicy?: string
   contactEmail?: string
   contactPhone?: string
   payoutEmail?: string
   totalSales: number
   totalRevenue: number
-  rating?: number
+  rating: number
   isVerified: boolean
   isActive: boolean
   createdAt: Date
   updatedAt: Date
 }
 
-interface UpdateProfileDTO {
-  storeName?: string
-  storeDescription?: string
-  storeLogoUrl?: string
-  storeBannerUrl?: string
-  businessAddress?: string
-  taxId?: string
-  socialFacebook?: string
-  socialInstagram?: string
-  socialTwitter?: string
-  returnPolicy?: string
-  shippingPolicy?: string
-  contactEmail?: string
-  contactPhone?: string
-  payoutEmail?: string
-}
-
 export class SellerService {
   async getOrCreateProfile(userId: string): Promise<SellerProfile> {
-    const existing = await pool.query('SELECT * FROM seller_profiles WHERE user_id = $1', [userId])
-    if (existing.rows.length > 0) return this.mapProfile(existing.rows[0])
+    const result = await pool.query('SELECT * FROM seller_profiles WHERE user_id = ?', [userId])
+    
+    if (result.rows.length > 0) {
+      return this.mapProfile(result.rows[0])
+    }
 
-    const userResult = await pool.query('SELECT email, first_name, last_name FROM users WHERE id = $1', [userId])
-    if (userResult.rows.length === 0) throw new Error('User not found')
-    const u = userResult.rows[0]
+    // Create a new profile if not exists
+    const id = crypto.randomUUID()
+    // Try to get some default info from users table
+    const userResult = await pool.query('SELECT first_name, last_name, email FROM users WHERE id = ?', [userId])
+    const user = userResult.rows[0]
+    const storeName = user ? `${user.first_name}'s Store` : 'New Store'
+    const contactEmail = user ? user.email : null
 
-    const result = await pool.query(
-      `INSERT INTO seller_profiles (user_id, store_name, contact_email)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [userId, `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'My Store', u.email]
+    await pool.query(
+      `INSERT INTO seller_profiles (id, user_id, store_name, contact_email)
+       VALUES (?, ?, ?, ?)`,
+      [id, userId, storeName, contactEmail]
     )
-    return this.mapProfile(result.rows[0])
+
+    const newProfile = await pool.query('SELECT * FROM seller_profiles WHERE id = ?', [id])
+    return this.mapProfile(newProfile.rows[0])
   }
 
-  async updateProfile(userId: string, data: UpdateProfileDTO): Promise<SellerProfile> {
+  async updateProfile(userId: string, data: any): Promise<SellerProfile> {
     const updates: string[] = []
-    const values: any[] = []
-    let p = 1
+    const params: any[] = []
 
-    const fieldMap: [keyof UpdateProfileDTO, string][] = [
-      ['storeName', 'store_name'],
-      ['storeDescription', 'store_description'],
-      ['storeLogoUrl', 'store_logo_url'],
-      ['storeBannerUrl', 'store_banner_url'],
-      ['businessAddress', 'business_address'],
-      ['taxId', 'tax_id'],
-      ['socialFacebook', 'social_facebook'],
-      ['socialInstagram', 'social_instagram'],
-      ['socialTwitter', 'social_twitter'],
-      ['returnPolicy', 'return_policy'],
-      ['shippingPolicy', 'shipping_policy'],
-      ['contactEmail', 'contact_email'],
-      ['contactPhone', 'contact_phone'],
-      ['payoutEmail', 'payout_email'],
-    ]
+    const fieldMap: Record<string, string> = {
+      storeName: 'store_name',
+      storeDescription: 'store_description',
+      storeLogoUrl: 'store_logo_url',
+      storeBannerUrl: 'store_banner_url',
+      contactEmail: 'contact_email',
+      contactPhone: 'contact_phone',
+      payoutEmail: 'payout_email'
+    }
 
-    for (const [field, col] of fieldMap) {
-      if (data[field] !== undefined) {
-        updates.push(`${col} = $${p++}`)
-        values.push(data[field])
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (data[key] !== undefined) {
+        updates.push(`${dbField} = ?`)
+        params.push(data[key])
       }
     }
 
-    if (updates.length === 0) throw new Error('No fields to update')
-    updates.push('updated_at = CURRENT_TIMESTAMP')
-    values.push(userId)
+    if (updates.length === 0) {
+      return this.getOrCreateProfile(userId)
+    }
 
-    const result = await pool.query(
-      `UPDATE seller_profiles SET ${updates.join(', ')} WHERE user_id = $${p} RETURNING *`,
-      values
+    params.push(userId)
+    await pool.query(
+      `UPDATE seller_profiles SET ${updates.join(', ')} WHERE user_id = ?`,
+      params
     )
-    if (result.rows.length === 0) throw new Error('Seller profile not found')
-    return this.mapProfile(result.rows[0])
+
+    return this.getOrCreateProfile(userId)
   }
 
-  async getProducts(sellerId: string, limit = 20, offset = 0): Promise<{ products: any[]; total: number }> {
-    const [productsResult, countResult] = await Promise.all([
-      pool.query(
-        `SELECT p.*, c.name as category_name,
-                (SELECT url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) as image_url
-         FROM products p
-         LEFT JOIN categories c ON p.category_id = c.id
-         WHERE p.seller_id = $1
-         ORDER BY p.created_at DESC
-         LIMIT $2 OFFSET $3`,
-        [sellerId, limit, offset]
-      ),
-      pool.query('SELECT COUNT(*) FROM products WHERE seller_id = $1', [sellerId]),
-    ])
-
-    return {
-      products: productsResult.rows.map(row => ({
-        ...(productService as any).mapProduct(row),
-        imageUrl: row.image_url,
-        categoryName: row.category_name
-      })),
-      total: parseInt(countResult.rows[0].count),
-    }
-  }
-
-  async getOrders(sellerId: string, limit = 20, offset = 0): Promise<{ orders: any[]; total: number }> {
-    const [ordersResult, countResult] = await Promise.all([
-      pool.query(
-        `SELECT DISTINCT o.id, o.order_number, o.status, o.total_amount,
-                o.customer_email, o.created_at
-         FROM orders o
-         JOIN order_items oi ON oi.order_id = o.id
-         JOIN products p ON p.id = oi.product_id
-         WHERE p.seller_id = $1
-         ORDER BY o.created_at DESC
-         LIMIT $2 OFFSET $3`,
-        [sellerId, limit, offset]
-      ),
-      pool.query(
-        `SELECT COUNT(DISTINCT o.id) FROM orders o
-         JOIN order_items oi ON oi.order_id = o.id
-         JOIN products p ON p.id = oi.product_id
-         WHERE p.seller_id = $1`,
-        [sellerId]
-      ),
-    ])
-
-    return {
-      orders: ordersResult.rows.map(r => ({
-        id: r.id,
-        orderNumber: r.order_number,
-        status: r.status,
-        totalAmount: parseFloat(r.total_amount),
-        customerEmail: r.customer_email,
-        createdAt: r.created_at
-      })),
-      total: parseInt(countResult.rows[0].count),
-    }
-  }
-
-  async getDashboardStats(sellerId: string): Promise<any> {
-    const [productCount, orderStats, revenueStats, currentMonthRevenue, lastMonthRevenue, currentMonthOrders, lastMonthOrders] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM products WHERE seller_id = $1', [sellerId]),
-      pool.query(
-        `SELECT COUNT(DISTINCT o.id) as total_orders
-         FROM orders o
-         JOIN order_items oi ON oi.order_id = o.id
-         JOIN products p ON p.id = oi.product_id
-         WHERE p.seller_id = $1`,
-        [sellerId]
-      ),
-      pool.query(
-        `SELECT COALESCE(SUM(oi.subtotal), 0) as total_revenue
-         FROM order_items oi
-         JOIN products p ON p.id = oi.product_id
-         JOIN orders o ON o.id = oi.order_id
-         WHERE p.seller_id = $1 AND o.status != 'cancelled'`,
-        [sellerId]
-      ),
-      // Last 30 days revenue
-      pool.query(
-        `SELECT COALESCE(SUM(oi.subtotal), 0) as revenue
-         FROM order_items oi
-         JOIN products p ON p.id = oi.product_id
-         JOIN orders o ON o.id = oi.order_id
-         WHERE p.seller_id = $1 AND o.status != 'cancelled'
-         AND o.created_at >= NOW() - INTERVAL '30 days'`,
-        [sellerId]
-      ),
-      // 30-60 days ago revenue
-      pool.query(
-        `SELECT COALESCE(SUM(oi.subtotal), 0) as revenue
-         FROM order_items oi
-         JOIN products p ON p.id = oi.product_id
-         JOIN orders o ON o.id = oi.order_id
-         WHERE p.seller_id = $1 AND o.status != 'cancelled'
-         AND o.created_at >= NOW() - INTERVAL '60 days'
-         AND o.created_at < NOW() - INTERVAL '30 days'`,
-        [sellerId]
-      ),
-      // Last 30 days orders
-      pool.query(
-        `SELECT COUNT(DISTINCT o.id) as orders
-         FROM orders o
-         JOIN order_items oi ON oi.order_id = o.id
-         JOIN products p ON p.id = oi.product_id
-         WHERE p.seller_id = $1 AND o.created_at >= NOW() - INTERVAL '30 days'`,
-        [sellerId]
-      ),
-      // 30-60 days ago orders
-      pool.query(
-        `SELECT COUNT(DISTINCT o.id) as orders
-         FROM orders o
-         JOIN order_items oi ON oi.order_id = o.id
-         JOIN products p ON p.id = oi.product_id
-         WHERE p.seller_id = $1 AND o.created_at >= NOW() - INTERVAL '60 days'
-         AND o.created_at < NOW() - INTERVAL '30 days'`,
-        [sellerId]
-      ),
-    ])
-
-    const currRev = parseFloat(currentMonthRevenue.rows[0].revenue)
-    const lastRev = parseFloat(lastMonthRevenue.rows[0].revenue)
-    const revTrend = lastRev > 0 ? ((currRev - lastRev) / lastRev) * 100 : 0
-
-    const currOrd = parseInt(currentMonthOrders.rows[0].orders)
-    const lastOrd = parseInt(lastMonthOrders.rows[0].orders)
-    const ordTrend = lastOrd > 0 ? ((currOrd - lastOrd) / lastOrd) : 0
-
-    return {
-      totalProducts: parseInt(productCount.rows[0].count),
-      totalOrders: parseInt(orderStats.rows[0].total_orders),
-      totalRevenue: parseFloat(revenueStats.rows[0].total_revenue),
-      revenueTrend: revTrend.toFixed(1),
-      ordersTrend: currOrd - lastOrd,
-      viewCount: 0, // Placeholder for future enhancement
-      conversionRate: 0, // Placeholder for future enhancement
-    }
-  }
-
-  async updateSellerProduct(productId: string, sellerId: string, data: Record<string, unknown>): Promise<any> {
-    const check = await pool.query('SELECT id FROM products WHERE id = $1 AND seller_id = $2', [productId, sellerId])
-    if (check.rows.length === 0) throw new Error('Product not found or not owned by seller')
-    return productService.updateProduct(productId, data)
-  }
-
-  async deleteSellerProduct(productId: string, sellerId: string): Promise<void> {
-    const check = await pool.query('SELECT id FROM products WHERE id = $1 AND seller_id = $2', [productId, sellerId])
-    if (check.rows.length === 0) throw new Error('Product not found or not owned by seller')
-    await productService.deleteProduct(productId)
-  }
-
-  async updateOrderStatus(orderId: string, sellerId: string, status: string, trackingNumber?: string): Promise<any> {
-    const check = await pool.query(
-      `SELECT DISTINCT o.id FROM orders o
-       JOIN order_items oi ON oi.order_id = o.id
+  async getDashboardStats(userId: string): Promise<any> {
+    // Total Revenue & Orders
+    const salesResult = await pool.query(
+      `SELECT COALESCE(SUM(oi.subtotal), 0) as revenue, COUNT(DISTINCT o.id) as orders
+       FROM orders o
+       JOIN order_items oi ON o.id = oi.order_id
        JOIN products p ON p.id = oi.product_id
-       WHERE o.id = $1 AND p.seller_id = $2`,
-      [orderId, sellerId]
+       WHERE p.seller_id = ? AND o.status != 'cancelled'`,
+      [userId]
     )
-    if (check.rows.length === 0) throw new Error('Order not found or not authorized')
 
-    const updates: string[] = ['status = $1', 'updated_at = CURRENT_TIMESTAMP']
-    const values: any[] = [status]
+    // Total Products
+    const productsResult = await pool.query(
+      'SELECT COUNT(*) as count FROM products WHERE seller_id = ?',
+      [userId]
+    )
+
+    // Average Rating
+    const ratingResult = await pool.query(
+      'SELECT rating FROM seller_profiles WHERE user_id = ?',
+      [userId]
+    )
+
+    // Recent 5 Orders
+    const recentOrdersResult = await pool.query(
+      `SELECT DISTINCT o.id, o.order_number as orderNumber, o.total_amount as totalAmount, o.status, o.created_at as createdAt
+       FROM orders o
+       JOIN order_items oi ON o.id = oi.order_id
+       JOIN products p ON p.id = oi.product_id
+       WHERE p.seller_id = ?
+       ORDER BY o.created_at DESC
+       LIMIT 5`,
+      [userId]
+    )
+
+    return {
+      revenue: parseFloat(salesResult.rows[0].revenue),
+      orders: parseInt(salesResult.rows[0].orders),
+      products: parseInt(productsResult.rows[0].count),
+      rating: parseFloat(ratingResult.rows[0]?.rating || 0),
+      recentOrders: recentOrdersResult.rows
+    }
+  }
+
+  async getProducts(userId: string, limit: number, offset: number): Promise<any> {
+    const [products, count] = await Promise.all([
+      pool.query(
+        `SELECT p.*, c.name as categoryName,
+                (SELECT SUM(stock_quantity) FROM product_variants WHERE product_id = p.id) as totalStock
+         FROM products p
+         LEFT JOIN categories c ON c.id = p.category_id
+         WHERE p.seller_id = ?
+         ORDER BY p.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [userId, limit, offset]
+      ),
+      pool.query('SELECT COUNT(*) as count FROM products WHERE seller_id = ?', [userId])
+    ])
+
+    return {
+      products: products.rows,
+      total: parseInt(count.rows[0].count)
+    }
+  }
+
+  async getOrders(userId: string, limit: number, offset: number): Promise<any> {
+    const [orders, count] = await Promise.all([
+      pool.query(
+        `SELECT DISTINCT o.id, o.order_number as orderNumber, o.total_amount as totalAmount, 
+                         o.status, o.created_at as createdAt, u.email as customerEmail
+         FROM orders o
+         JOIN order_items oi ON o.id = oi.order_id
+         JOIN products p ON p.id = oi.product_id
+         JOIN users u ON u.id = o.user_id
+         WHERE p.seller_id = ?
+         ORDER BY o.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [userId, limit, offset]
+      ),
+      pool.query(
+        `SELECT COUNT(DISTINCT o.id) as count
+         FROM orders o
+         JOIN order_items oi ON o.id = oi.order_id
+         JOIN products p ON p.id = oi.product_id
+         WHERE p.seller_id = ?`,
+        [userId]
+      )
+    ])
+
+    return {
+      orders: orders.rows,
+      total: parseInt(count.rows[0].count)
+    }
+  }
+
+  async updateOrderStatus(orderId: string, userId: string, status: string, trackingNumber?: string): Promise<any> {
+    // Verify order contains items from this seller
+    const check = await pool.query(
+      `SELECT 1 FROM order_items oi
+       JOIN products p ON p.id = oi.product_id
+       WHERE oi.order_id = ? AND p.seller_id = ?
+       LIMIT 1`,
+      [orderId, userId]
+    )
+
+    if (check.rows.length === 0) {
+      throw new Error('Access denied or order not found')
+    }
+
+    const updates = ['status = ?']
+    const params: any[] = [status]
 
     if (trackingNumber) {
-      updates.push(`tracking_number = $${values.length + 1}`)
-      values.push(trackingNumber)
+      updates.push('tracking_number = ?')
+      params.push(trackingNumber)
     }
-    values.push(orderId)
 
-    const result = await pool.query(
-      `UPDATE orders SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`,
-      values
+    params.push(orderId)
+    await pool.query(
+      `UPDATE orders SET ${updates.join(', ')} WHERE id = ?`,
+      params
     )
+
+    return { success: true }
+  }
+
+  async updateSellerProduct(productId: string, userId: string, data: any): Promise<any> {
+    // Verify ownership
+    const check = await pool.query('SELECT 1 FROM products WHERE id = ? AND seller_id = ?', [productId, userId])
+    if (check.rows.length === 0) throw new Error('Access denied or product not found')
+
+    // Reuse logic from ProductService if possible, or implement here
+    const updates: string[] = []
+    const params: any[] = []
+
+    const fields = ['name', 'description', 'base_price', 'price', 'status', 'brand', 'sku']
+    for (const field of fields) {
+      if (data[field] !== undefined) {
+        updates.push(`${field} = ?`)
+        params.push(data[field])
+      }
+    }
+
+    if (updates.length > 0) {
+      params.push(productId)
+      await pool.query(`UPDATE products SET ${updates.join(', ')} WHERE id = ?`, params)
+    }
+
+    const result = await pool.query('SELECT * FROM products WHERE id = ?', [productId])
     return result.rows[0]
   }
 
-  async getInventory(sellerId: string): Promise<any[]> {
+  async deleteSellerProduct(productId: string, userId: string): Promise<void> {
+    const result = await pool.query('DELETE FROM products WHERE id = ? AND seller_id = ?', [productId, userId])
+    if (result.rowCount === 0) throw new Error('Access denied or product not found')
+  }
+
+  async getInventory(userId: string): Promise<any[]> {
     const result = await pool.query(
-      `SELECT p.id, p.name, p.sku, p.stock_quantity, p.status,
-              p.base_price, p.price,
-              (SELECT url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) as image_url,
-              c.name as category_name
+      `SELECT p.id, p.name, p.sku, 
+              (SELECT SUM(stock_quantity) FROM product_variants WHERE product_id = p.id) as totalStock,
+              p.stock_quantity as baseStock
        FROM products p
-       LEFT JOIN categories c ON p.category_id = c.id
-       WHERE p.seller_id = $1
-       ORDER BY p.stock_quantity ASC`,
-      [sellerId]
+       WHERE p.seller_id = ?`,
+      [userId]
     )
-    return result.rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      sku: row.sku,
-      stockQuantity: row.stock_quantity,
-      status: row.status,
-      basePrice: parseFloat(row.base_price),
-      price: parseFloat(row.price || row.base_price),
-      imageUrl: row.image_url,
-      categoryName: row.category_name
-    }))
+    return result.rows
   }
 
-  async updateStock(productId: string, sellerId: string, stockQuantity: number): Promise<any> {
-    const check = await pool.query('SELECT id FROM products WHERE id = $1 AND seller_id = $2', [productId, sellerId])
-    if (check.rows.length === 0) throw new Error('Product not found or not authorized')
+  async updateStock(productId: string, userId: string, quantity: number): Promise<any> {
     const result = await pool.query(
-      'UPDATE products SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, name, stock_quantity',
-      [stockQuantity, productId]
+      'UPDATE products SET stock_quantity = ? WHERE id = ? AND seller_id = ?',
+      [quantity, productId, userId]
     )
+    if (result.rowCount === 0) throw new Error('Access denied or product not found')
+    
+    const updated = await pool.query('SELECT id, stock_quantity FROM products WHERE id = ?', [productId])
+    return updated.rows[0]
+  }
+
+  async getEarnings(userId: string): Promise<any> {
+    const result = await pool.query(
+      `SELECT 
+         COALESCE(SUM(oi.subtotal), 0) as totalEarnings,
+         COALESCE(SUM(CASE WHEN o.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN oi.subtotal ELSE 0 END), 0) as last30Days
+       FROM orders o
+       JOIN order_items oi ON o.id = oi.order_id
+       JOIN products p ON p.id = oi.product_id
+       WHERE p.seller_id = ? AND o.status = 'delivered'`,
+      [userId]
+    )
+
+    const revenue = await pool.query(
+      `SELECT DATE(o.created_at) as date, SUM(oi.subtotal) as amount
+       FROM orders o
+       JOIN order_items oi ON o.id = oi.order_id
+       JOIN products p ON p.id = oi.product_id
+       WHERE p.seller_id = ? AND o.status = 'delivered'
+       GROUP BY DATE(o.created_at)
+       ORDER BY date DESC
+       LIMIT 30`,
+      [userId]
+    )
+
     return {
-      id: result.rows[0].id,
-      name: result.rows[0].name,
-      stockQuantity: result.rows[0].stock_quantity
+      summary: result.rows[0],
+      history: revenue.rows
     }
   }
 
-  async getEarnings(sellerId: string): Promise<any> {
-    const rateResult = await pool.query(`SELECT value FROM platform_settings WHERE key = 'commission_rate' LIMIT 1`)
-    const rate = parseFloat(rateResult.rows[0]?.value || '10') / 100
-    const netRate = 1 - rate
-
-    const [total, monthly, recent] = await Promise.all([
-      pool.query(
-        `SELECT
-           COALESCE(SUM(oi.subtotal), 0) as gross_revenue,
-           COALESCE(SUM(oi.subtotal * $2), 0) as net_revenue,
-           COALESCE(SUM(oi.subtotal * $3), 0) as platform_fee,
-           COUNT(DISTINCT o.id) as total_orders
-         FROM order_items oi
-         JOIN products p ON p.id = oi.product_id
-         JOIN orders o ON o.id = oi.order_id
-         WHERE p.seller_id = $1 AND o.status NOT IN ('cancelled', 'refunded')`,
-        [sellerId, netRate, rate]
-      ),
-      pool.query(
-        `SELECT
-           DATE_TRUNC('month', o.created_at) as month,
-           COALESCE(SUM(oi.subtotal * $2), 0) as net_revenue,
-           COUNT(DISTINCT o.id) as orders
-         FROM order_items oi
-         JOIN products p ON p.id = oi.product_id
-         JOIN orders o ON o.id = oi.order_id
-         WHERE p.seller_id = $1 AND o.status NOT IN ('cancelled', 'refunded')
-           AND o.created_at >= NOW() - INTERVAL '6 months'
-         GROUP BY DATE_TRUNC('month', o.created_at)
-         ORDER BY month DESC`,
-        [sellerId, netRate]
-      ),
-      pool.query(
-        `SELECT o.order_number, o.created_at, o.status,
-                COALESCE(SUM(oi.subtotal * $2), 0) as net_amount,
-                COALESCE(SUM(oi.subtotal * $3), 0) as fee
-         FROM order_items oi
-         JOIN products p ON p.id = oi.product_id
-         JOIN orders o ON o.id = oi.order_id
-         WHERE p.seller_id = $1 AND o.status NOT IN ('cancelled', 'refunded')
-         GROUP BY o.id, o.order_number, o.created_at, o.status
-         ORDER BY o.created_at DESC
-         LIMIT 10`,
-        [sellerId, netRate, rate]
-      ),
-    ])
-
-    return {
-      summary: {
-        grossRevenue: parseFloat(total.rows[0].gross_revenue),
-        netRevenue: parseFloat(total.rows[0].net_revenue),
-        platformFee: parseFloat(total.rows[0].platform_fee),
-        totalOrders: parseInt(total.rows[0].total_orders),
-        commissionRate: rate * 100
-      },
-      monthly: monthly.rows.map(r => ({
-        month: r.month,
-        netRevenue: parseFloat(r.net_revenue),
-        orders: parseInt(r.orders)
-      })),
-      recentPayouts: recent.rows.map(r => ({
-        orderNumber: r.order_number,
-        createdAt: r.created_at,
-        status: r.status,
-        netAmount: parseFloat(r.net_amount),
-        fee: parseFloat(r.fee)
-      })),
-    }
-  }
-
-  async getSellerReviews(sellerId: string, limit = 20, offset = 0): Promise<any> {
+  async getSellerReviews(userId: string, limit: number, offset: number): Promise<any> {
     const [reviews, count] = await Promise.all([
       pool.query(
-        `SELECT r.id, r.rating, r.title, r.comment, r.is_verified_purchase,
-                r.created_at, r.seller_response, r.seller_response_at,
-                p.name as product_name, p.id as product_id,
-                u.first_name, u.last_name
+        `SELECT r.*, p.name as productName, u.first_name, u.last_name
          FROM reviews r
          JOIN products p ON p.id = r.product_id
          JOIN users u ON u.id = r.user_id
-         WHERE p.seller_id = $1
+         WHERE p.seller_id = ?
          ORDER BY r.created_at DESC
-         LIMIT $2 OFFSET $3`,
-        [sellerId, limit, offset]
+         LIMIT ? OFFSET ?`,
+        [userId, limit, offset]
       ),
       pool.query(
-        `SELECT COUNT(*) FROM reviews r
+        `SELECT COUNT(*) as count FROM reviews r
          JOIN products p ON p.id = r.product_id
-         WHERE p.seller_id = $1`,
-        [sellerId]
-      ),
+         WHERE p.seller_id = ?`,
+        [userId]
+      )
     ])
 
     return {
-      reviews: reviews.rows.map(r => ({
-        id: r.id,
-        rating: r.rating,
-        title: r.title,
-        comment: r.comment,
-        isVerifiedPurchase: r.is_verified_purchase,
-        createdAt: r.created_at,
-        sellerResponse: r.seller_response,
-        sellerResponseAt: r.seller_response_at,
-        productName: r.product_name,
-        productId: r.product_id,
-        firstName: r.first_name,
-        lastName: r.last_name
-      })),
-      total: parseInt(count.rows[0].count),
+      reviews: reviews.rows,
+      total: parseInt(count.rows[0].count)
     }
   }
 
-  async respondToReview(reviewId: string, sellerId: string, response: string): Promise<any> {
+  async respondToReview(reviewId: string, userId: string, response: string): Promise<any> {
     const check = await pool.query(
-      `SELECT r.id FROM reviews r
+      `SELECT 1 FROM reviews r
        JOIN products p ON p.id = r.product_id
-       WHERE r.id = $1 AND p.seller_id = $2`,
-      [reviewId, sellerId]
+       WHERE r.id = ? AND p.seller_id = ?`,
+      [reviewId, userId]
     )
-    if (check.rows.length === 0) throw new Error('Review not found or not authorized')
 
-    const result = await pool.query(
-      `UPDATE reviews SET seller_response = $1, seller_response_at = CURRENT_TIMESTAMP
-       WHERE id = $2 RETURNING *`,
+    if (check.rows.length === 0) throw new Error('Access denied or review not found')
+
+    await pool.query(
+      'UPDATE reviews SET seller_response = ?, seller_response_at = NOW() WHERE id = ?',
       [response, reviewId]
     )
-    const row = result.rows[0]
-    return {
-      id: row.id,
-      sellerResponse: row.seller_response,
-      sellerResponseAt: row.seller_response_at
-    }
+
+    const updated = await pool.query('SELECT * FROM reviews WHERE id = ?', [reviewId])
+    return updated.rows[0]
   }
 
   private mapProfile(row: any): SellerProfile {
@@ -461,23 +343,16 @@ export class SellerService {
       storeDescription: row.store_description,
       storeLogoUrl: row.store_logo_url,
       storeBannerUrl: row.store_banner_url,
-      businessAddress: row.business_address,
-      taxId: row.tax_id,
-      socialFacebook: row.social_facebook,
-      socialInstagram: row.social_instagram,
-      socialTwitter: row.social_twitter,
-      returnPolicy: row.return_policy,
-      shippingPolicy: row.shipping_policy,
       contactEmail: row.contact_email,
       contactPhone: row.contact_phone,
       payoutEmail: row.payout_email,
-      totalSales: parseFloat(row.total_sales || 0),
-      totalRevenue: parseFloat(row.total_revenue || 0),
-      rating: row.rating ? parseFloat(row.rating) : undefined,
-      isVerified: row.is_verified,
-      isActive: row.is_active,
+      totalSales: parseInt(row.total_sales) || 0,
+      totalRevenue: parseFloat(row.total_revenue) || 0,
+      rating: parseFloat(row.rating) || 0,
+      isVerified: Boolean(row.is_verified),
+      isActive: Boolean(row.is_active),
       createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      updatedAt: row.updated_at
     }
   }
 }

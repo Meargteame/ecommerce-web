@@ -39,7 +39,7 @@ export class AuthService {
   async register(data: RegisterDTO): Promise<AuthResult & { verificationToken: string }> {
     const { email, password, firstName, lastName, phone, role = 'customer' } = data
 
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()])
+    const existing = await pool.query('SELECT id FROM users WHERE email = ?', [email.toLowerCase()])
     if (existing.rows.length > 0) throw new Error('User with this email already exists')
 
     const passwordHash = await bcrypt.hash(password, this.bcryptRounds)
@@ -48,22 +48,35 @@ export class AuthService {
     const rawToken = crypto.randomBytes(32).toString('hex')
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
     const tokenExpiry = new Date(Date.now() + 24 * 3600 * 1000) // 24 hours
+    const id = crypto.randomUUID()
 
-    const result = await pool.query(
+    await pool.query(
       `INSERT INTO users (
-        email, password_hash, first_name, last_name, phone, role,
+        id, email, password_hash, first_name, last_name, phone, role,
         email_verification_token, email_verification_expires
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-      RETURNING id, email, first_name, last_name, phone, email_verified, account_status, role, created_at, updated_at`,
-      [email.toLowerCase(), passwordHash, firstName || null, lastName || null, phone || null,
+      ) VALUES (?,?,?,?,?,?,?,?,?)`,
+      [id, email.toLowerCase(), passwordHash, firstName || null, lastName || null, phone || null,
        role, tokenHash, tokenExpiry]
     )
 
-    const user = this.mapUser(result.rows[0])
+    const profile = await this.getUserById(id)
+    if (!profile) throw new Error('User not found after registration')
+    
+    const user = profile
     const accessToken = generateAccessToken({ userId: user.id, email: user.email, role: user.role })
     const refreshToken = generateRefreshToken({ userId: user.id, email: user.email, role: user.role })
 
     return { user, accessToken, refreshToken, verificationToken: rawToken }
+  }
+
+  async getUserById(id: string): Promise<User | null> {
+    const result = await pool.query(
+      `SELECT id, email, first_name, last_name, phone, email_verified, account_status, role, created_at, updated_at
+       FROM users WHERE id = ?`,
+      [id]
+    )
+    if (result.rows.length === 0) return null
+    return this.mapUser(result.rows[0])
   }
 
   async verifyEmail(token: string): Promise<void> {
@@ -71,8 +84,8 @@ export class AuthService {
 
     const result = await pool.query(
       `SELECT id FROM users
-       WHERE email_verification_token = $1
-         AND email_verification_expires > NOW()
+       WHERE email_verification_token = ?
+         AND email_verification_expires > CURRENT_TIMESTAMP
          AND email_verified = FALSE`,
       [tokenHash]
     )
@@ -87,7 +100,7 @@ export class AuthService {
            email_verification_token = NULL,
            email_verification_expires = NULL,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
+       WHERE id = ?`,
       [result.rows[0].id]
     )
   }
@@ -97,7 +110,7 @@ export class AuthService {
       `SELECT id, email, password_hash, first_name, last_name, phone,
               email_verified, account_status, is_active, role,
               failed_login_attempts, locked_until, created_at, updated_at
-       FROM users WHERE email = $1`,
+       FROM users WHERE email = ?`,
       [email.toLowerCase()]
     )
 
@@ -121,7 +134,7 @@ export class AuthService {
     }
 
     await pool.query(
-      'UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1',
+      'UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?',
       [row.id]
     )
 
@@ -134,7 +147,7 @@ export class AuthService {
 
   async refreshToken(userId: string, email: string, role: string): Promise<{ accessToken: string }> {
     const result = await pool.query(
-      'SELECT account_status, is_active FROM users WHERE id = $1', [userId]
+      'SELECT account_status, is_active FROM users WHERE id = ?', [userId]
     )
     if (result.rows.length === 0) throw new Error('User not found')
 
@@ -148,7 +161,7 @@ export class AuthService {
 
   async requestPasswordReset(email: string): Promise<string> {
       const result = await pool.query(
-        'SELECT id FROM users WHERE email = $1', [email.toLowerCase()]
+        'SELECT id FROM users WHERE email = ?', [email.toLowerCase()]
       )
 
       if (result.rows.length === 0) {
@@ -160,7 +173,7 @@ export class AuthService {
       const expiry = new Date(Date.now() + 3600000) // 1 hour
 
       await pool.query(
-        'UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3',
+        'UPDATE users SET password_reset_token = ?, password_reset_expires = ? WHERE id = ?',
         [tokenHash, expiry, result.rows[0].id]
       )
 
@@ -178,7 +191,7 @@ export class AuthService {
 
     const result = await pool.query(
       `SELECT id FROM users
-       WHERE password_reset_token = $1 AND password_reset_expires > NOW()`,
+       WHERE password_reset_token = ? AND password_reset_expires > CURRENT_TIMESTAMP`,
       [tokenHash]
     )
     if (result.rows.length === 0) throw new Error('Invalid or expired reset token')
@@ -186,23 +199,23 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(newPassword, this.bcryptRounds)
     await pool.query(
       `UPDATE users
-       SET password_hash = $1, password_reset_token = NULL,
+       SET password_hash = ?, password_reset_token = NULL,
            password_reset_expires = NULL, failed_login_attempts = 0, locked_until = NULL
-       WHERE id = $2`,
+       WHERE id = ?`,
       [passwordHash, result.rows[0].id]
     )
   }
 
   async resendVerification(email: string): Promise<void> {
     const result = await pool.query(
-      'SELECT id, email_verified FROM users WHERE email = $1', [email.toLowerCase()]
+      'SELECT id, email_verified FROM users WHERE email = ?', [email.toLowerCase()]
     )
     if (result.rows.length === 0 || result.rows[0].email_verified) return
     const rawToken = crypto.randomBytes(32).toString('hex')
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
     const expiry = new Date(Date.now() + 24 * 3600 * 1000)
     await pool.query(
-      'UPDATE users SET email_verification_token=$1, email_verification_expires=$2 WHERE id=$3',
+      'UPDATE users SET email_verification_token=?, email_verification_expires=? WHERE id=?',
       [tokenHash, expiry, result.rows[0].id]
     )
     const { default: notificationService } = await import('./notificationService')
@@ -211,7 +224,7 @@ export class AuthService {
 
   async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
     const result = await pool.query(
-      'SELECT password_hash FROM users WHERE id = $1', [userId]
+      'SELECT password_hash FROM users WHERE id = ?', [userId]
     )
     if (result.rows.length === 0) throw new Error('User not found')
 
@@ -219,7 +232,7 @@ export class AuthService {
     if (!valid) throw new Error('Current password is incorrect')
 
     const passwordHash = await bcrypt.hash(newPassword, this.bcryptRounds)
-    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId])
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId])
   }
 
   private async handleFailedLogin(userId: string, currentAttempts: number): Promise<void> {
@@ -227,12 +240,12 @@ export class AuthService {
     if (newAttempts >= this.maxLoginAttempts) {
       const lockUntil = new Date(Date.now() + this.lockoutDuration * 60000)
       await pool.query(
-        'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3',
+        'UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?',
         [newAttempts, lockUntil, userId]
       )
     } else {
       await pool.query(
-        'UPDATE users SET failed_login_attempts = $1 WHERE id = $2',
+        'UPDATE users SET failed_login_attempts = ? WHERE id = ?',
         [newAttempts, userId]
       )
     }

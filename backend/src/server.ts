@@ -11,39 +11,12 @@ const PORT = process.env.PORT || 5000
 // Test database connection
 const testDatabaseConnection = async () => {
   try {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     console.log('Database connection test successful')
     client.release()
   } catch (error) {
     console.error('Database connection test failed:', error)
     process.exit(1)
-  }
-}
-
-// Run pending schema migrations safely (idempotent)
-const runMigrations = async () => {
-  const client = await pool.connect()
-  try {
-    // 011: email verification columns
-    await client.query(`
-      ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMPTZ;
-    `)
-    // 012: seller_id on products
-    await client.query(`
-      ALTER TABLE products
-        ADD COLUMN IF NOT EXISTS seller_id UUID REFERENCES users(id) ON DELETE SET NULL;
-    `)
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_products_seller_id ON products(seller_id) WHERE seller_id IS NOT NULL;
-    `)
-    console.log('Schema migrations applied successfully')
-  } catch (err: any) {
-    // Non-fatal — log and continue
-    console.warn('Migration warning:', err.message)
-  } finally {
-    client.release()
   }
 }
 
@@ -53,11 +26,12 @@ const startServer = async () => {
     // Test database connection
     await testDatabaseConnection()
 
-    // Apply pending migrations
-    await runMigrations()
-    
-    // Connect to Redis
-    await connectRedis()
+    // Connect to Redis (optional — server runs without it)
+    try {
+      await connectRedis()
+    } catch {
+      console.warn('Redis unavailable — running without cache')
+    }
     
     // Start Express server
     app.listen(PORT, () => {

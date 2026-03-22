@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { AuthRequest, authenticate, optionalAuth } from '../middleware/auth'
 import pool from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import crypto from 'crypto'
 
 const router = Router()
 
@@ -17,7 +18,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         p.name as product_name, p.slug, p.base_price as current_price, p.average_rating, p.review_count,
         pv.variant_name, pv.price as variant_current_price, pv.sku,
         (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = true LIMIT 1) as image,
-        (SELECT json_agg(json_build_object('attribute_name', a.name, 'value', v.attribute_value))
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT('attribute_name', a.name, 'value', v.attribute_value))
          FROM variant_attributes v
          JOIN product_attributes a ON a.id = v.attribute_id
          WHERE v.variant_id = sfl.variant_id
@@ -30,7 +31,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       FROM saved_for_later sfl
       JOIN products p ON p.id = sfl.product_id
       LEFT JOIN product_variants pv ON pv.id = sfl.variant_id
-      WHERE sfl.user_id = $1
+      WHERE sfl.user_id = ?
       ORDER BY sfl.saved_at DESC`,
       [userId]
     )
@@ -51,9 +52,9 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     const priceResult = await pool.query(
       `SELECT COALESCE(pv.price, p.base_price) as price
        FROM products p
-       LEFT JOIN product_variants pv ON pv.id = $2 AND pv.product_id = p.id
-       WHERE p.id = $1`,
-      [productId, variantId]
+       LEFT JOIN product_variants pv ON pv.id = ? AND pv.product_id = p.id
+       WHERE p.id = ?`,
+      [variantId || null, productId]
     )
     
     if (priceResult.rows.length === 0) {
@@ -62,16 +63,20 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     
     const priceAtSave = priceResult.rows[0].price
     
-    const result = await pool.query(
-      `INSERT INTO saved_for_later (user_id, product_id, variant_id, quantity, price_at_save)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (user_id, product_id, variant_id)
-       DO UPDATE SET quantity = EXCLUDED.quantity, saved_at = NOW(), price_at_save = EXCLUDED.price_at_save
-       RETURNING *`,
-      [userId, productId, variantId || null, quantity || 1, priceAtSave]
+    const id = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO saved_for_later (id, user_id, product_id, variant_id, quantity, price_at_save)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE 
+         quantity = VALUES(quantity), 
+         saved_at = NOW(), 
+         price_at_save = VALUES(price_at_save)`,
+      [id, userId, productId, variantId || null, quantity || 1, priceAtSave]
     )
     
-    res.status(201).json({ message: 'Item saved for later', data: result.rows[0] })
+    const finalResult = await pool.query('SELECT * FROM saved_for_later WHERE user_id = ? AND product_id = ? AND variant_id <=> ?', [userId, productId, variantId || null])
+    
+    res.status(201).json({ message: 'Item saved for later', data: finalResult.rows[0] })
   } catch (error) {
     if (error instanceof AppError) throw error
     throw new AppError('Failed to save item', 500)
@@ -85,49 +90,35 @@ router.post('/:id/move-to-cart', authenticate, async (req: AuthRequest, res: Res
     const { id } = req.params
     
     // Get saved item
-    const savedItem = await pool.query(
-      `SELECT * FROM saved_for_later WHERE id = $1 AND user_id = $2`,
+    const savedItemResult = await pool.query(
+      `SELECT * FROM saved_for_later WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
-    if (savedItem.rows.length === 0) {
+    if (savedItemResult.rows.length === 0) {
       throw new AppError('Saved item not found', 404)
     }
     
-    const item = savedItem.rows[0]
+    const item = savedItemResult.rows[0]
     
     // Get or create cart
     let cartResult = await pool.query(
-      `SELECT id FROM carts WHERE user_id = $1`,
+      `SELECT id FROM carts WHERE user_id = ?`,
       [userId]
     )
     
-    let cartId
-    if (cartResult.rows.length === 0) {
-      const newCart = await pool.query(
-        `INSERT INTO carts (user_id) VALUES ($1) RETURNING id`,
-        [userId]
-      )
-      cartId = newCart.rows[0].id
-    } else {
-      cartId = cartResult.rows[0].id
-    }
-    
     // Add to cart
+    const cartItemId = crypto.randomUUID()
     await pool.query(
-      `INSERT INTO cart_items (cart_id, product_id, variant_id, quantity, unit_price)
-       SELECT $1, $2, $3, $4, COALESCE(pv.price, p.base_price)
-       FROM products p
-       LEFT JOIN product_variants pv ON pv.id = $3
-       WHERE p.id = $2
-       ON CONFLICT (cart_id, product_id, variant_id)
-       DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity`,
-      [cartId, item.product_id, item.variant_id, item.quantity]
+      `INSERT INTO cart_items (id, user_id, product_id, variant_id, quantity)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE quantity = cart_items.quantity + VALUES(quantity)`,
+      [cartItemId, userId, item.product_id, item.variant_id || null, item.quantity]
     )
     
     // Remove from saved
     await pool.query(
-      `DELETE FROM saved_for_later WHERE id = $1`,
+      `DELETE FROM saved_for_later WHERE id = ?`,
       [id]
     )
     
@@ -145,11 +136,11 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const { id } = req.params
     
     const result = await pool.query(
-      `DELETE FROM saved_for_later WHERE id = $1 AND user_id = $2 RETURNING *`,
+      `DELETE FROM saved_for_later WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
-    if (result.rows.length === 0) {
+    if (result.rowCount === 0) {
       throw new AppError('Saved item not found', 404)
     }
     
@@ -165,39 +156,25 @@ router.post('/move-all-to-cart', authenticate, async (req: AuthRequest, res: Res
   try {
     const userId = req.user!.userId
     
-    // Get or create cart
-    let cartResult = await pool.query(
-      `SELECT id FROM carts WHERE user_id = $1`,
+    const itemsToMoveResult = await pool.query(
+      `SELECT * FROM saved_for_later WHERE user_id = ?`,
       [userId]
     )
-    
-    let cartId
-    if (cartResult.rows.length === 0) {
-      const newCart = await pool.query(
-        `INSERT INTO carts (user_id) VALUES ($1) RETURNING id`,
-        [userId]
-      )
-      cartId = newCart.rows[0].id
-    } else {
-      cartId = cartResult.rows[0].id
+    const itemsToMove = itemsToMoveResult.rows
+
+    for (const item of itemsToMove) {
+        const cartItemId = crypto.randomUUID()
+        await pool.query(
+          `INSERT INTO cart_items (id, user_id, product_id, variant_id, quantity)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE quantity = cart_items.quantity + VALUES(quantity)`,
+          [cartItemId, userId, item.product_id, item.variant_id || null, item.quantity]
+        )
     }
-    
-    // Move all items
-    await pool.query(
-      `INSERT INTO cart_items (cart_id, product_id, variant_id, quantity, unit_price)
-       SELECT $1, sfl.product_id, sfl.variant_id, sfl.quantity, COALESCE(pv.price, p.base_price)
-       FROM saved_for_later sfl
-       JOIN products p ON p.id = sfl.product_id
-       LEFT JOIN product_variants pv ON pv.id = sfl.variant_id
-       WHERE sfl.user_id = $2
-       ON CONFLICT (cart_id, product_id, variant_id)
-       DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity`,
-      [cartId, userId]
-    )
     
     // Clear saved items
     await pool.query(
-      `DELETE FROM saved_for_later WHERE user_id = $1`,
+      `DELETE FROM saved_for_later WHERE user_id = ?`,
       [userId]
     )
     
@@ -221,7 +198,7 @@ router.get('/price-changes', authenticate, async (req: AuthRequest, res: Respons
         (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = true LIMIT 1) as image
       FROM saved_for_later sfl
       JOIN products p ON p.id = sfl.product_id
-      WHERE sfl.user_id = $1 AND p.base_price != sfl.price_at_save
+      WHERE sfl.user_id = ? AND p.base_price != sfl.price_at_save
       ORDER BY ABS(p.base_price - sfl.price_at_save) DESC`,
       [userId]
     )

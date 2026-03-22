@@ -1,5 +1,6 @@
 import pool from '../config/database'
 import { cache } from '../config/redis'
+import crypto from 'crypto'
 
 interface CreatePromotionDTO {
   code: string
@@ -65,14 +66,15 @@ interface Discount {
 
 export class PromotionService {
   async createPromotion(data: CreatePromotionDTO): Promise<Promotion> {
-    const result = await pool.query(
+    const id = crypto.randomUUID()
+    await pool.query(
       `INSERT INTO promotions (
-        code, name, description, discount_type, discount_value,
+        id, code, name, description, discount_type, discount_value,
         min_purchase_amount, max_discount_amount, usage_limit, per_user_limit,
         start_date, end_date
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING *`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        id,
         data.code.toUpperCase(),
         data.name,
         data.description || null,
@@ -87,74 +89,66 @@ export class PromotionService {
       ]
     )
 
+    const promotion = await this.getPromotion(id)
+    if (!promotion) throw new Error('Failed to create promotion')
+
     // Clear cache
     await this.clearPromotionCache()
 
-    return this.mapPromotion(result.rows[0])
+    return promotion
   }
 
   async updatePromotion(id: string, data: UpdatePromotionDTO): Promise<Promotion> {
     const updates: string[] = []
     const values: any[] = []
-    let paramCount = 0
 
     if (data.name !== undefined) {
-      paramCount++
-      updates.push(`name = $${paramCount}`)
+      updates.push('name = ?')
       values.push(data.name)
     }
 
     if (data.description !== undefined) {
-      paramCount++
-      updates.push(`description = $${paramCount}`)
+      updates.push('description = ?')
       values.push(data.description)
     }
 
     if (data.discountValue !== undefined) {
-      paramCount++
-      updates.push(`discount_value = $${paramCount}`)
+      updates.push('discount_value = ?')
       values.push(data.discountValue)
     }
 
     if (data.minPurchaseAmount !== undefined) {
-      paramCount++
-      updates.push(`min_purchase_amount = $${paramCount}`)
+      updates.push('min_purchase_amount = ?')
       values.push(data.minPurchaseAmount)
     }
 
     if (data.maxDiscountAmount !== undefined) {
-      paramCount++
-      updates.push(`max_discount_amount = $${paramCount}`)
+      updates.push('max_discount_amount = ?')
       values.push(data.maxDiscountAmount)
     }
 
     if (data.usageLimit !== undefined) {
-      paramCount++
-      updates.push(`usage_limit = $${paramCount}`)
+      updates.push('usage_limit = ?')
       values.push(data.usageLimit)
     }
 
     if (data.perUserLimit !== undefined) {
-      paramCount++
-      updates.push(`per_user_limit = $${paramCount}`)
+      updates.push('per_user_limit = ?')
       values.push(data.perUserLimit)
     }
 
     if (data.startDate !== undefined) {
-      paramCount++
-      updates.push(`start_date = $${paramCount}`)
+      updates.push('start_date = ?')
       values.push(data.startDate)
     }
 
     if (data.endDate !== undefined) {
-      paramCount++
-      updates.push(`end_date = $${paramCount}`)
+      updates.push('end_date = ?')
       values.push(data.endDate)
     }
 
     if (data.isActive !== undefined) {
-      paramCount++
-      updates.push(`is_active = $${paramCount}`)
+      updates.push('is_active = ?')
       values.push(data.isActive)
     }
 
@@ -163,28 +157,30 @@ export class PromotionService {
     }
 
     updates.push('updated_at = CURRENT_TIMESTAMP')
-    paramCount++
     values.push(id)
 
     const result = await pool.query(
-      `UPDATE promotions SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+      `UPDATE promotions SET ${updates.join(', ')} WHERE id = ?`,
       values
     )
 
-    if (result.rows.length === 0) {
+    if ((result as any).affectedRows === 0) {
       throw new Error('Promotion not found')
     }
+
+    const promotion = await this.getPromotion(id)
+    if (!promotion) throw new Error('Promotion not found after update')
 
     // Clear cache
     await this.clearPromotionCache()
 
-    return this.mapPromotion(result.rows[0])
+    return promotion
   }
 
   async deletePromotion(id: string): Promise<void> {
-    const result = await pool.query('DELETE FROM promotions WHERE id = $1', [id])
+    const result = await pool.query('DELETE FROM promotions WHERE id = ?', [id])
 
-    if (result.rowCount === 0) {
+    if ((result as any).affectedRows === 0) {
       throw new Error('Promotion not found')
     }
 
@@ -193,7 +189,7 @@ export class PromotionService {
   }
 
   async getPromotion(id: string): Promise<Promotion | null> {
-    const result = await pool.query('SELECT * FROM promotions WHERE id = $1', [id])
+    const result = await pool.query('SELECT * FROM promotions WHERE id = ?', [id])
 
     if (result.rows.length === 0) {
       return null
@@ -211,7 +207,7 @@ export class PromotionService {
       return JSON.parse(cached)
     }
 
-    const result = await pool.query('SELECT * FROM promotions WHERE code = $1', [
+    const result = await pool.query('SELECT * FROM promotions WHERE code = ?', [
       code.toUpperCase(),
     ])
 
@@ -244,7 +240,7 @@ export class PromotionService {
        ORDER BY created_at DESC`
     )
 
-    const promotions = result.rows.map(row => this.mapPromotion(row))
+    const promotions = result.rows.map((row: any) => this.mapPromotion(row))
 
     // Cache for 10 minutes
     await cache.set(cacheKey, 600, JSON.stringify(promotions))
@@ -254,7 +250,7 @@ export class PromotionService {
 
   async getAllPromotions(): Promise<Promotion[]> {
     const result = await pool.query('SELECT * FROM promotions ORDER BY created_at DESC')
-    return result.rows.map(row => this.mapPromotion(row))
+    return result.rows.map((row: any) => this.mapPromotion(row))
   }
 
   async validateCoupon(
@@ -306,10 +302,10 @@ export class PromotionService {
     // Check per-user limit
     if (userId) {
       const userUsageResult = await pool.query(
-        `SELECT COUNT(*) FROM orders
-         WHERE user_id = $1
+        `SELECT COUNT(*) as count FROM orders
+         WHERE user_id = ?
          AND id IN (
-           SELECT order_id FROM carts WHERE promotion_id = $2
+           SELECT order_id FROM carts WHERE promotion_id = ?
          )`,
         [userId, promotion.id]
       )
@@ -364,9 +360,9 @@ export class PromotionService {
 
   async incrementUsageCount(promotionId: string): Promise<void> {
     await pool.query(
-      'UPDATE promotions SET usage_count = usage_count + 1 WHERE id = $1',
+      'UPDATE promotions SET usage_count = usage_count + 1 WHERE id = ?',
       [promotionId]
-    )
+)
 
     // Clear cache
     await this.clearPromotionCache()

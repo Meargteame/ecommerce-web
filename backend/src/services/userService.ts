@@ -1,4 +1,5 @@
 import pool from '../config/database'
+import crypto from 'crypto'
 
 interface UpdateProfileDTO {
   firstName?: string
@@ -46,7 +47,7 @@ export class UserService {
     const result = await pool.query(
       `SELECT id, email, first_name, last_name, phone, avatar_url, email_verified,
               account_status, role, created_at, updated_at
-       FROM users WHERE id = $1`,
+       FROM users WHERE id = ?`,
       [userId]
     )
     if (result.rows.length === 0) return null
@@ -57,58 +58,62 @@ export class UserService {
     const { firstName, lastName, phone, avatarUrl } = data
     const updates: string[] = []
     const values: any[] = []
-    let p = 1
 
-    if (firstName !== undefined) { updates.push(`first_name = $${p++}`); values.push(firstName) }
-    if (lastName !== undefined)  { updates.push(`last_name = $${p++}`);  values.push(lastName) }
-    if (phone !== undefined)     { updates.push(`phone = $${p++}`);      values.push(phone) }
-    if (avatarUrl !== undefined) { updates.push(`avatar_url = $${p++}`); values.push(avatarUrl) }
+    if (firstName !== undefined) { updates.push(`first_name = ?`); values.push(firstName) }
+    if (lastName !== undefined)  { updates.push(`last_name = ?`);  values.push(lastName) }
+    if (phone !== undefined)     { updates.push(`phone = ?`);      values.push(phone) }
+    if (avatarUrl !== undefined) { updates.push(`avatar_url = ?`); values.push(avatarUrl) }
 
     if (updates.length === 0) throw new Error('No fields to update')
 
     updates.push('updated_at = CURRENT_TIMESTAMP')
     values.push(userId)
 
-    const result = await pool.query(
-      `UPDATE users SET ${updates.join(', ')} WHERE id = $${p}
-       RETURNING id, email, first_name, last_name, phone, avatar_url, email_verified,
-                 account_status, role, created_at, updated_at`,
+    await pool.query(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
       values
     )
-    return this.mapUser(result.rows[0])
+    
+    const profile = await this.getProfile(userId)
+    if (!profile) throw new Error('User not found after update')
+    return profile
   }
 
   async becomeSeller(userId: string, storeName?: string, contactEmail?: string, description?: string): Promise<User> {
-    const current = await pool.query('SELECT role FROM users WHERE id = $1', [userId])
+    const current = await pool.query('SELECT role FROM users WHERE id = ?', [userId])
     if (current.rows.length === 0) throw new Error('User not found')
     if (current.rows[0].role === 'seller' || current.rows[0].role === 'admin') {
       throw new Error('User is already a seller or admin')
     }
-    const result = await pool.query(
+    
+    await pool.query(
       `UPDATE users SET role = 'seller', updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1
-       RETURNING id, email, first_name, last_name, phone, avatar_url, email_verified,
-                 account_status, role, created_at, updated_at`,
+       WHERE id = ?`,
       [userId]
     )
+    
     try {
       await pool.query(
-        `INSERT INTO seller_profiles (user_id, store_name, contact_email, store_description)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (user_id) DO UPDATE SET store_name = EXCLUDED.store_name`,
-        [userId, storeName || 'My Store', contactEmail || null, description || null]
+        `INSERT INTO seller_profiles (id, user_id, store_name, contact_email, store_description)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE store_name = VALUES(store_name)`,
+        [crypto.randomUUID(), userId, storeName || 'My Store', contactEmail || null, description || null]
       )
-    } catch {
+    } catch (e) {
+      console.error('Error creating seller profile:', e)
       // seller_profiles table may not exist yet — ignore
     }
-    return this.mapUser(result.rows[0])
+    
+    const profile = await this.getProfile(userId)
+    if (!profile) throw new Error('User not found after role update')
+    return profile
   }
 
   async getAddresses(userId: string): Promise<Address[]> {
     const result = await pool.query(
       `SELECT id, user_id, address_type, full_name, address_line1, address_line2,
               city, state, postal_code, country, phone, is_default, created_at, updated_at
-       FROM addresses WHERE user_id = $1
+       FROM addresses WHERE user_id = ?
        ORDER BY is_default DESC, created_at DESC`,
       [userId]
     )
@@ -119,7 +124,7 @@ export class UserService {
     const result = await pool.query(
       `SELECT id, user_id, address_type, full_name, address_line1, address_line2,
               city, state, postal_code, country, phone, is_default, created_at, updated_at
-       FROM addresses WHERE id = $1 AND user_id = $2`,
+       FROM addresses WHERE id = ? AND user_id = ?`,
       [addressId, userId]
     )
     if (result.rows.length === 0) return null
@@ -127,32 +132,39 @@ export class UserService {
   }
 
   async createAddress(userId: string, data: AddressDTO): Promise<Address> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
       if (data.isDefault) {
         await client.query(
-          'UPDATE addresses SET is_default = FALSE WHERE user_id = $1 AND address_type = $2',
+          'UPDATE addresses SET is_default = FALSE WHERE user_id = ? AND address_type = ?',
           [userId, data.addressType]
         )
       }
-      const result = await client.query(
+      const id = crypto.randomUUID()
+      await client.query(
         `INSERT INTO addresses (
-          user_id, address_type, full_name, address_line1, address_line2,
+          id, user_id, address_type, full_name, address_line1, address_line2,
           city, state, postal_code, country, phone, is_default
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-        RETURNING id, user_id, address_type, full_name, address_line1, address_line2,
-                  city, state, postal_code, country, phone, is_default, created_at, updated_at`,
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          userId, data.addressType, data.fullName, data.addressLine1,
+          id, userId, data.addressType, data.fullName, data.addressLine1,
           data.addressLine2 || null, data.city, data.state || null,
           data.postalCode, data.country, data.phone || null, data.isDefault || false,
         ]
       )
-      await client.query('COMMIT')
-      return this.mapAddress(result.rows[0])
+      
+      const [rows] = await client.query(
+        `SELECT id, user_id, address_type, full_name, address_line1, address_line2,
+                city, state, postal_code, country, phone, is_default, created_at, updated_at
+         FROM addresses WHERE id = ?`,
+        [id]
+      )
+      
+      await client.commit()
+      return this.mapAddress((rows as any)[0])
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -160,26 +172,26 @@ export class UserService {
   }
 
   async updateAddress(userId: string, addressId: string, data: Partial<AddressDTO>): Promise<Address> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     try {
-      await client.query('BEGIN')
-      const checkResult = await client.query(
-        'SELECT id, address_type FROM addresses WHERE id = $1 AND user_id = $2',
+      await client.beginTransaction()
+      const [checkRows] = await client.query(
+        'SELECT id, address_type FROM addresses WHERE id = ? AND user_id = ?',
         [addressId, userId]
       )
-      if (checkResult.rows.length === 0) throw new Error('Address not found')
+      const checkResult = checkRows as any[]
+      if (checkResult.length === 0) throw new Error('Address not found')
 
-      const addressType = checkResult.rows[0].address_type
+      const addressType = checkResult[0].address_type
       if (data.isDefault) {
         await client.query(
-          'UPDATE addresses SET is_default = FALSE WHERE user_id = $1 AND address_type = $2 AND id != $3',
+          'UPDATE addresses SET is_default = FALSE WHERE user_id = ? AND address_type = ? AND id != ?',
           [userId, addressType, addressId]
         )
       }
 
       const updates: string[] = []
       const values: any[] = []
-      let p = 1
 
       const fieldMap: [keyof AddressDTO, string][] = [
         ['addressType', 'address_type'], ['fullName', 'full_name'],
@@ -190,7 +202,7 @@ export class UserService {
 
       for (const [field, col] of fieldMap) {
         if (data[field] !== undefined) {
-          updates.push(`${col} = $${p++}`)
+          updates.push(`${col} = ?`)
           values.push(data[field])
         }
       }
@@ -199,17 +211,23 @@ export class UserService {
       updates.push('updated_at = CURRENT_TIMESTAMP')
       values.push(addressId, userId)
 
-      const result = await client.query(
+      await client.query(
         `UPDATE addresses SET ${updates.join(', ')}
-         WHERE id = $${p} AND user_id = $${p + 1}
-         RETURNING id, user_id, address_type, full_name, address_line1, address_line2,
-                   city, state, postal_code, country, phone, is_default, created_at, updated_at`,
+         WHERE id = ? AND user_id = ?`,
         values
       )
-      await client.query('COMMIT')
-      return this.mapAddress(result.rows[0])
+      
+      const [rows] = await client.query(
+        `SELECT id, user_id, address_type, full_name, address_line1, address_line2,
+                  city, state, postal_code, country, phone, is_default, created_at, updated_at
+         FROM addresses WHERE id = ?`,
+        [addressId]
+      )
+      
+      await client.commit()
+      return this.mapAddress((rows as any)[0])
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -218,10 +236,10 @@ export class UserService {
 
   async deleteAddress(userId: string, addressId: string): Promise<void> {
     const result = await pool.query(
-      'DELETE FROM addresses WHERE id = $1 AND user_id = $2',
+      'DELETE FROM addresses WHERE id = ? AND user_id = ?',
       [addressId, userId]
     )
-    if (result.rowCount === 0) throw new Error('Address not found')
+    if ((result as any).affectedRows === 0) throw new Error('Address not found')
   }
 
   async getWishlist(userId: string): Promise<any[]> {
@@ -231,11 +249,11 @@ export class UserService {
               (SELECT url FROM product_images WHERE product_id = p.id AND is_primary = TRUE LIMIT 1) as image_url
        FROM wishlists w
        JOIN products p ON w.product_id = p.id
-       WHERE w.user_id = $1
+       WHERE w.user_id = ?
        ORDER BY w.created_at DESC`,
       [userId]
     )
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       productId: row.product_id,
       createdAt: row.created_at,
@@ -251,29 +269,29 @@ export class UserService {
   }
 
   async addToWishlist(userId: string, productId: string): Promise<void> {
-    const productCheck = await pool.query('SELECT id FROM products WHERE id = $1', [productId])
+    const productCheck = await pool.query('SELECT id FROM products WHERE id = ?', [productId])
     if (productCheck.rows.length === 0) throw new Error('Product not found')
 
     const existingCheck = await pool.query(
-      'SELECT id FROM wishlists WHERE user_id = $1 AND product_id = $2',
+      'SELECT id FROM wishlists WHERE user_id = ? AND product_id = ?',
       [userId, productId]
     )
     if (existingCheck.rows.length > 0) throw new Error('Product already in wishlist')
 
-    await pool.query('INSERT INTO wishlists (user_id, product_id) VALUES ($1, $2)', [userId, productId])
+    await pool.query('INSERT INTO wishlists (id, user_id, product_id) VALUES (?, ?, ?)', [crypto.randomUUID(), userId, productId])
   }
 
   async removeFromWishlist(userId: string, wishlistId: string): Promise<void> {
     const result = await pool.query(
-      'DELETE FROM wishlists WHERE id = $1 AND user_id = $2',
+      'DELETE FROM wishlists WHERE id = ? AND user_id = ?',
       [wishlistId, userId]
     )
-    if (result.rowCount === 0) throw new Error('Wishlist item not found')
+    if ((result as any).affectedRows === 0) throw new Error('Wishlist item not found')
   }
 
   async isInWishlist(userId: string, productId: string): Promise<boolean> {
     const result = await pool.query(
-      'SELECT id FROM wishlists WHERE user_id = $1 AND product_id = $2',
+      'SELECT id FROM wishlists WHERE user_id = ? AND product_id = ?',
       [userId, productId]
     )
     return result.rows.length > 0
@@ -283,12 +301,12 @@ export class UserService {
     const result = await pool.query(
       `SELECT id, order_number, status, subtotal, shipping_cost, tax_amount,
               discount_amount, total_amount, currency, created_at, updated_at
-       FROM orders WHERE user_id = $1
+       FROM orders WHERE user_id = ?
        ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
+       LIMIT ? OFFSET ?`,
       [userId, limit, offset]
     )
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       orderNumber: row.order_number,
       status: row.status,
@@ -306,9 +324,11 @@ export class UserService {
   async listUsers(role?: string, limit = 50, offset = 0): Promise<{ users: User[]; total: number }> {
     const conditions: string[] = []
     const values: any[] = []
-    let p = 1
 
-    if (role) { conditions.push(`role = $${p++}`); values.push(role) }
+    if (role) { 
+      conditions.push(`role = ?`)
+      values.push(role) 
+    }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
@@ -318,14 +338,14 @@ export class UserService {
                 account_status, role, created_at, updated_at
          FROM users ${where}
          ORDER BY created_at DESC
-         LIMIT $${p} OFFSET $${p + 1}`,
+         LIMIT ? OFFSET ?`,
         [...values, limit, offset]
       ),
-      pool.query(`SELECT COUNT(*) FROM users ${where}`, values),
+      pool.query(`SELECT COUNT(*) as count FROM users ${where}`, values),
     ])
 
     return {
-      users: usersResult.rows.map(this.mapUser),
+      users: usersResult.rows.map((u: any) => this.mapUser(u)),
       total: parseInt(countResult.rows[0].count),
     }
   }
@@ -335,15 +355,15 @@ export class UserService {
     if (!allowed.includes(status)) {
       throw new Error(`Invalid status. Must be one of: ${allowed.join(', ')}`)
     }
-    const result = await pool.query(
-      `UPDATE users SET account_status = $1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2
-       RETURNING id, email, first_name, last_name, phone, avatar_url, email_verified,
-                 account_status, role, created_at, updated_at`,
+    await pool.query(
+      `UPDATE users SET account_status = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
       [status, userId]
     )
-    if (result.rows.length === 0) throw new Error('User not found')
-    return this.mapUser(result.rows[0])
+    
+    const profile = await this.getProfile(userId)
+    if (!profile) throw new Error('User not found')
+    return profile
   }
 
   private mapUser(row: any): User {

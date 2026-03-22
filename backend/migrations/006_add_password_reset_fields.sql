@@ -3,12 +3,8 @@
 
 -- Add password reset fields
 ALTER TABLE users 
-ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255),
-ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP;
+ADD COLUMN password_reset_token VARCHAR(255),
+ADD COLUMN password_reset_expires TIMESTAMP NULL;
 
 -- Create index for password reset token lookups
-CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(password_reset_token);
-
--- Add comment
-COMMENT ON COLUMN users.password_reset_token IS 'Hashed token for password reset';
-COMMENT ON COLUMN users.password_reset_expires IS 'Expiration timestamp for password reset token';
+CREATE INDEX idx_users_reset_token ON users(password_reset_token);

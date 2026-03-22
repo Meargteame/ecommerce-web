@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { AuthRequest, authenticate, optionalAuth } from '../middleware/auth'
 import pool from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import crypto from 'crypto'
 
 const router = Router()
 
@@ -14,7 +15,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     
     const result = await pool.query(
       `SELECT pcs.*,
-        (SELECT json_agg(json_build_object(
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT(
           'id', p.id, 'name', p.name, 'slug', p.slug, 'base_price', p.base_price,
           'brand', p.brand, 'average_rating', p.average_rating, 'review_count', p.review_count,
           'image', (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = true LIMIT 1)
@@ -25,7 +26,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         ) as products,
         (SELECT COUNT(*) FROM product_comparison_items WHERE set_id = pcs.id) as product_count
       FROM product_comparison_sets pcs
-      WHERE pcs.user_id = $1
+      WHERE pcs.user_id = ?
       ORDER BY pcs.created_at DESC`,
       [userId]
     )
@@ -43,21 +44,26 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     const { name, productIds } = req.body
     
     // Create set
-    const setResult = await pool.query(
-      `INSERT INTO product_comparison_sets (user_id, name, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '30 days')
-       RETURNING *`,
-      [userId, name || 'Product Comparison']
+    const id = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO product_comparison_sets (id, user_id, name, expires_at)
+       VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))`,
+      [id, userId, name || 'Product Comparison']
     )
     
-    const setId = setResult.rows[0].id
+    const setResult = await pool.query('SELECT * FROM product_comparison_sets WHERE id = ?', [id])
+    const setId = id
     
     // Add products
     if (productIds && productIds.length > 0) {
-      const values = productIds.map((_: any, i: number) => `($1, $${i + 2})`).join(', ')
+      const placeholders = productIds.map(() => '(?, ?, ?)').join(', ')
+      const values: any[] = []
+      productIds.forEach((pid: string) => {
+        values.push(crypto.randomUUID(), setId, pid)
+      })
       await pool.query(
-        `INSERT INTO product_comparison_items (set_id, product_id) VALUES ${values}`,
-        [setId, ...productIds]
+        `INSERT INTO product_comparison_items (id, set_id, product_id) VALUES ${placeholders}`,
+        values
       )
     }
     
@@ -79,7 +85,7 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
     // Check ownership if user is logged in
     if (userId) {
       const ownershipCheck = await pool.query(
-        `SELECT id FROM product_comparison_sets WHERE id = $1 AND user_id = $2`,
+        `SELECT id FROM product_comparison_sets WHERE id = ? AND user_id = ?`,
         [id, userId]
       )
       if (ownershipCheck.rows.length === 0) {
@@ -94,25 +100,25 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
         p.average_rating, p.review_count, p.specifications,
         c.name as category_name,
         (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = true LIMIT 1) as image,
-        (SELECT json_agg(json_build_object('url', image_url, 'alt', alt_text))
-         FROM (SELECT image_url, alt_text FROM product_images WHERE product_id = p.id LIMIT 5)
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT('url', image_url, 'alt', alt_text))
+         FROM (SELECT image_url, alt_text FROM product_images WHERE product_id = p.id LIMIT 5) img
         ) as images,
-        (SELECT json_agg(json_build_object(
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT(
           'id', pv.id, 'variant_name', pv.variant_name, 'price', pv.price, 'sku', pv.sku,
-          'attributes', (SELECT json_agg(json_build_object('name', a.name, 'value', va.attribute_value))
+          'attributes', (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', a.name, 'value', va.attribute_value))
                          FROM variant_attributes va
                          JOIN product_attributes a ON a.id = va.attribute_id
                          WHERE va.variant_id = pv.id)
         ))
          FROM product_variants pv WHERE pv.product_id = p.id
         ) as variants,
-        (SELECT json_agg(json_build_object('rating', r.rating, 'title', r.title, 'content', r.content))
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT('rating', r.rating, 'title', r.title, 'content', r.content))
          FROM (SELECT rating, title, content FROM reviews WHERE product_id = p.id ORDER BY created_at DESC LIMIT 3) r
         ) as recent_reviews
       FROM product_comparison_items pci
       JOIN products p ON p.id = pci.product_id
       LEFT JOIN categories c ON c.id = p.category_id
-      WHERE pci.set_id = $1`,
+      WHERE pci.set_id = ?`,
       [id]
     )
     
@@ -124,14 +130,15 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
     const products = productsResult.rows
     const allSpecs = new Set<string>()
     
-    products.forEach(p => {
+    products.forEach((p: any) => {
       if (p.specifications) {
-        Object.keys(p.specifications).forEach(key => allSpecs.add(key))
+        const specs = typeof p.specifications === 'string' ? JSON.parse(p.specifications) : p.specifications
+        Object.keys(specs).forEach(key => allSpecs.add(key))
       }
     })
     
     const comparisonTable = {
-      products: products.map(p => ({
+      products: products.map((p: any) => ({
         id: p.id,
         name: p.name,
         slug: p.slug,
@@ -147,15 +154,18 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
       })),
       specifications: Array.from(allSpecs).map(spec => ({
         name: spec,
-        values: products.map(p => ({
-          productId: p.id,
-          value: p.specifications?.[spec] || 'N/A'
-        }))
+        values: products.map((p: any) => {
+          const specs = typeof p.specifications === 'string' ? JSON.parse(p.specifications) : p.specifications
+          return {
+            productId: p.id,
+            value: specs?.[spec] || 'N/A'
+          }
+        })
       })),
       highlights: {
-        lowestPrice: products.reduce((min, p) => p.base_price < min.base_price ? p : min, products[0]),
-        highestRated: products.reduce((max, p) => (p.average_rating || 0) > (max.average_rating || 0) ? p : max, products[0]),
-        mostReviewed: products.reduce((max, p) => (p.review_count || 0) > (max.review_count || 0) ? p : max, products[0])
+        lowestPrice: products.reduce((min: any, p: any) => p.base_price < min.base_price ? p : min, products[0]),
+        highestRated: products.reduce((max: any, p: any) => (p.average_rating || 0) > (max.average_rating || 0) ? p : max, products[0]),
+        mostReviewed: products.reduce((max: any, p: any) => (p.review_count || 0) > (max.review_count || 0) ? p : max, products[0])
       }
     }
     
@@ -175,7 +185,7 @@ router.post('/:id/products', authenticate, async (req: AuthRequest, res: Respons
     
     // Verify ownership
     const ownershipCheck = await pool.query(
-      `SELECT id FROM product_comparison_sets WHERE id = $1 AND user_id = $2`,
+      `SELECT id FROM product_comparison_sets WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
@@ -185,23 +195,23 @@ router.post('/:id/products', authenticate, async (req: AuthRequest, res: Respons
     
     // Check max products (typically 4-5 for comparison)
     const countCheck = await pool.query(
-      `SELECT COUNT(*) FROM product_comparison_items WHERE set_id = $1`,
+      `SELECT COUNT(*) as count FROM product_comparison_items WHERE set_id = ?`,
       [id]
     )
     
-    if (parseInt(countCheck.rows[0].count) >= 5) {
+    if (parseInt((countCheck.rows[0] as any).count) >= 5) {
       throw new AppError('Maximum 5 products allowed per comparison', 400)
     }
     
+    const itemId = crypto.randomUUID()
     const result = await pool.query(
-      `INSERT INTO product_comparison_items (set_id, product_id)
-       VALUES ($1, $2)
-       ON CONFLICT (set_id, product_id) DO NOTHING
-       RETURNING *`,
-      [id, productId]
+      `INSERT INTO product_comparison_items (id, set_id, product_id)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE product_id = product_id`,
+      [itemId, id, productId]
     )
     
-    if (result.rows.length === 0) {
+    if (result.rowCount === 0) {
       throw new AppError('Product already in comparison', 400)
     }
     
@@ -220,7 +230,7 @@ router.delete('/:id/products/:productId', authenticate, async (req: AuthRequest,
     
     // Verify ownership
     const ownershipCheck = await pool.query(
-      `SELECT id FROM product_comparison_sets WHERE id = $1 AND user_id = $2`,
+      `SELECT id FROM product_comparison_sets WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
@@ -229,7 +239,7 @@ router.delete('/:id/products/:productId', authenticate, async (req: AuthRequest,
     }
     
     await pool.query(
-      `DELETE FROM product_comparison_items WHERE set_id = $1 AND product_id = $2`,
+      `DELETE FROM product_comparison_items WHERE set_id = ? AND product_id = ?`,
       [id, productId]
     )
     
@@ -246,11 +256,11 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const { id } = req.params
     
     const result = await pool.query(
-      `DELETE FROM product_comparison_sets WHERE id = $1 AND user_id = $2 RETURNING *`,
+      `DELETE FROM product_comparison_sets WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     
-    if (result.rows.length === 0) {
+    if (result.rowCount === 0) {
       throw new AppError('Comparison set not found', 404)
     }
     
@@ -264,26 +274,28 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 router.post('/guest', async (req, res) => {
   try {
     const { productIds, sessionId } = req.body
-    
-    const crypto = require('crypto')
     const generatedSessionId = sessionId || crypto.randomBytes(32).toString('hex')
     
     // Create set with session
-    const setResult = await pool.query(
-      `INSERT INTO product_comparison_sets (session_id, expires_at)
-       VALUES ($1, NOW() + INTERVAL '7 days')
-       RETURNING *`,
-      [generatedSessionId]
+    const id = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO product_comparison_sets (id, session_id, expires_at)
+       VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY))`,
+      [id, generatedSessionId]
     )
     
-    const setId = setResult.rows[0].id
+    const setId = id
     
     // Add products
     if (productIds && productIds.length > 0) {
-      const values = productIds.map((_: any, i: number) => `($1, $${i + 2})`).join(', ')
+      const placeholders = productIds.map(() => '(?, ?, ?)').join(', ')
+      const values: any[] = []
+      productIds.forEach((pid: string) => {
+        values.push(crypto.randomUUID(), setId, pid)
+      })
       await pool.query(
-        `INSERT INTO product_comparison_items (set_id, product_id) VALUES ${values}`,
-        [setId, ...productIds]
+        `INSERT INTO product_comparison_items (id, set_id, product_id) VALUES ${placeholders}`,
+        values
       )
     }
     
@@ -303,7 +315,7 @@ router.get('/guest/:sessionId', async (req, res) => {
     const { sessionId } = req.params
     
     const setResult = await pool.query(
-      `SELECT id FROM product_comparison_sets WHERE session_id = $1 AND expires_at > NOW()`,
+      `SELECT id FROM product_comparison_sets WHERE session_id = ? AND expires_at > NOW()`,
       [sessionId]
     )
     
@@ -319,7 +331,7 @@ router.get('/guest/:sessionId', async (req, res) => {
         (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = true LIMIT 1) as image
       FROM product_comparison_items pci
       JOIN products p ON p.id = pci.product_id
-      WHERE pci.set_id = $1`,
+      WHERE pci.set_id = ?`,
       [setResult.rows[0].id]
     )
     

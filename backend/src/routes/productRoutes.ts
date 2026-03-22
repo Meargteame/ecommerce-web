@@ -299,20 +299,23 @@ router.post(
       // If setting as primary, unset existing primary
       if (isPrimary) {
         await pool.query(
-          'UPDATE product_images SET is_primary = false WHERE product_id = $1',
+          'UPDATE product_images SET is_primary = false WHERE product_id = ?',
           [id]
         )
       }
 
-      const result = await pool.query(
-        `INSERT INTO product_images (product_id, url, alt_text, display_order, is_primary)
-         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [id, url, altText || null, displayOrder || 0, isPrimary || false]
+      const imageId = (await import('crypto')).randomUUID()
+      await pool.query(
+        `INSERT INTO product_images (id, product_id, url, alt_text, display_order, is_primary)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [imageId, id, url, altText || null, displayOrder || 0, isPrimary || false]
       )
 
+      const finalResult = await pool.query('SELECT * FROM product_images WHERE id = ?', [imageId])
+      
       res.status(201).json({
         message: 'Image added successfully',
-        data: result.rows[0],
+        data: finalResult.rows[0],
       })
     } catch (error) {
       if (error instanceof Error) {

@@ -117,7 +117,7 @@ router.get('/preferences', authenticate, async (req: AuthRequest, res: Response)
     
     // Get user's current preferences
     const result = await pool.query(
-      `SELECT * FROM notification_preferences WHERE user_id = $1`,
+      `SELECT * FROM notification_preferences WHERE user_id = ?`,
       [userId]
     )
     
@@ -182,7 +182,7 @@ router.get('/preferences', authenticate, async (req: AuthRequest, res: Response)
     // Get user's communication preferences from users table
     const userResult = await pool.query(
       `SELECT marketing_consent, sms_consent, whatsapp_consent, language, timezone
-       FROM users WHERE id = $1`,
+       FROM users WHERE id = ?`,
       [userId]
     )
     
@@ -199,10 +199,10 @@ router.get('/preferences', authenticate, async (req: AuthRequest, res: Response)
 
 // PUT /api/notifications/preferences - Update preferences
 router.put('/preferences', authenticate, async (req: AuthRequest, res: Response) => {
-  const client = await pool.connect()
+  const client = await pool.getConnection()
   
   try {
-    await client.query('BEGIN')
+    await client.beginTransaction()
     
     const userId = req.user!.userId
     const { channels, globalSettings } = req.body
@@ -213,9 +213,8 @@ router.put('/preferences', authenticate, async (req: AuthRequest, res: Response)
         for (const [type, enabled] of Object.entries(types as any)) {
           await client.query(
             `INSERT INTO notification_preferences (user_id, channel, type, is_enabled)
-             VALUES ($1, $2, $3, $4)
-             ON CONFLICT (user_id, channel, type) 
-             DO UPDATE SET is_enabled = EXCLUDED.is_enabled, updated_at = NOW()`,
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE is_enabled = VALUES(is_enabled), updated_at = NOW()`,
             [userId, channel, type, enabled]
           )
         }
@@ -226,43 +225,42 @@ router.put('/preferences', authenticate, async (req: AuthRequest, res: Response)
     if (globalSettings) {
       const updates: string[] = []
       const values: any[] = []
-      let paramIndex = 1
       
       if ('marketingConsent' in globalSettings) {
-        updates.push(`marketing_consent = $${paramIndex++}`)
+        updates.push(`marketing_consent = ?`)
         values.push(globalSettings.marketingConsent)
       }
       if ('smsConsent' in globalSettings) {
-        updates.push(`sms_consent = $${paramIndex++}`)
+        updates.push(`sms_consent = ?`)
         values.push(globalSettings.smsConsent)
       }
       if ('whatsappConsent' in globalSettings) {
-        updates.push(`whatsapp_consent = $${paramIndex++}`)
+        updates.push(`whatsapp_consent = ?`)
         values.push(globalSettings.whatsappConsent)
       }
       if ('language' in globalSettings) {
-        updates.push(`language = $${paramIndex++}`)
+        updates.push(`language = ?`)
         values.push(globalSettings.language)
       }
       if ('timezone' in globalSettings) {
-        updates.push(`timezone = $${paramIndex++}`)
+        updates.push(`timezone = ?`)
         values.push(globalSettings.timezone)
       }
       
       if (updates.length > 0) {
         values.push(userId)
         await client.query(
-          `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+          `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
           values
         )
       }
     }
     
-    await client.query('COMMIT')
+    await client.commit()
     
     res.json({ message: 'Preferences updated successfully' })
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.rollback()
     throw new AppError('Failed to update preferences', 500)
   } finally {
     client.release()
@@ -278,17 +276,16 @@ router.post('/push/subscribe', authenticate, async (req: AuthRequest, res: Respo
     // Update or create device with push token
     await pool.query(
       `UPDATE user_devices 
-       SET push_token = $1, push_enabled = true, updated_at = NOW()
-       WHERE user_id = $2 AND device_id = $3`,
+       SET push_token = ?, push_enabled = true, updated_at = NOW()
+       WHERE user_id = ? AND device_id = ?`,
       [pushToken, userId, deviceId]
     )
     
     // If no rows updated, create device
     await pool.query(
       `INSERT INTO user_devices (user_id, device_id, device_type, device_name, push_token, push_enabled)
-       VALUES ($1, $2, $3, $4, $5, true)
-       ON CONFLICT (user_id, device_id) 
-       DO UPDATE SET push_token = EXCLUDED.push_token, push_enabled = true`,
+       VALUES (?, ?, ?, ?, ?, true)
+       ON DUPLICATE KEY UPDATE push_token = VALUES(push_token), push_enabled = true`,
       [userId, deviceId, deviceType, deviceName, pushToken]
     )
     
@@ -305,7 +302,7 @@ router.post('/push/unsubscribe', authenticate, async (req: AuthRequest, res: Res
     const { deviceId } = req.body
     
     await pool.query(
-      `UPDATE user_devices SET push_enabled = false, push_token = null WHERE user_id = $1 AND device_id = $2`,
+      `UPDATE user_devices SET push_enabled = false, push_token = null WHERE user_id = ? AND device_id = ?`,
       [userId, deviceId]
     )
     
@@ -334,7 +331,7 @@ router.get('/back-in-stock', authenticate, async (req: AuthRequest, res: Respons
       FROM back_in_stock_alerts bis
       JOIN products p ON p.id = bis.product_id
       LEFT JOIN product_variants pv ON pv.id = bis.variant_id
-      WHERE bis.user_id = $1 AND bis.is_active = true
+      WHERE bis.user_id = ? AND bis.is_active = true
       ORDER BY bis.created_at DESC`,
       [userId]
     )
@@ -354,18 +351,19 @@ router.post('/back-in-stock', authenticate, async (req: AuthRequest, res: Respon
     // Get user's email if not provided
     let alertEmail = email
     if (!alertEmail) {
-      const userResult = await pool.query('SELECT email FROM users WHERE id = $1', [userId])
+      const userResult = await pool.query('SELECT email FROM users WHERE id = ?', [userId])
       alertEmail = userResult.rows[0]?.email
     }
     
-    const result = await pool.query(
-      `INSERT INTO back_in_stock_alerts (user_id, product_id, variant_id, email)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (user_id, product_id, variant_id)
-       DO UPDATE SET is_active = true, email = EXCLUDED.email, created_at = NOW()
-       RETURNING *`,
-      [userId, productId, variantId || null, alertEmail]
+    const id = (await import('crypto')).randomUUID()
+    await pool.query(
+      `INSERT INTO back_in_stock_alerts (id, user_id, product_id, variant_id, email)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE is_active = true, email = VALUES(email), created_at = NOW()`,
+      [id, userId, productId, variantId || null, alertEmail]
     )
+    
+    const result = await pool.query('SELECT * FROM back_in_stock_alerts WHERE id = ?', [id])
     
     res.status(201).json({
       message: 'You will be notified when this item is back in stock',
@@ -383,7 +381,7 @@ router.delete('/back-in-stock/:id', authenticate, async (req: AuthRequest, res: 
     const { id } = req.params
     
     await pool.query(
-      `DELETE FROM back_in_stock_alerts WHERE id = $1 AND user_id = $2`,
+      `DELETE FROM back_in_stock_alerts WHERE id = ? AND user_id = ?`,
       [id, userId]
     )
     

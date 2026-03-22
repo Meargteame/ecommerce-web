@@ -3,7 +3,7 @@
 
 -- Promotions table
 CREATE TABLE promotions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id CHAR(36) PRIMARY KEY,
   code VARCHAR(50) UNIQUE NOT NULL,
   name VARCHAR(255) NOT NULL,
   description TEXT,
@@ -18,7 +18,7 @@ CREATE TABLE promotions (
   end_date TIMESTAMP NOT NULL,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_promotions_code ON promotions(code);
@@ -28,15 +28,17 @@ CREATE INDEX idx_promotions_end_date ON promotions(end_date);
 
 -- Carts table
 CREATE TABLE carts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  user_id CHAR(36),
   session_id VARCHAR(255),
-  promotion_id UUID REFERENCES promotions(id) ON DELETE SET NULL,
-  expires_at TIMESTAMP,
+  promotion_id CHAR(36),
+  expires_at TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE(user_id),
-  UNIQUE(session_id)
+  UNIQUE(session_id),
+  CONSTRAINT fk_carts_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_carts_promotion_id FOREIGN KEY (promotion_id) REFERENCES promotions(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_carts_user_id ON carts(user_id);
@@ -45,15 +47,18 @@ CREATE INDEX idx_carts_expires_at ON carts(expires_at);
 
 -- Cart Items table
 CREATE TABLE cart_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  cart_id UUID NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  product_variant_id UUID REFERENCES product_variants(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  cart_id CHAR(36) NOT NULL,
+  product_id CHAR(36) NOT NULL,
+  product_variant_id CHAR(36),
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   is_saved_for_later BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(cart_id, product_id, product_variant_id)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE(cart_id, product_id, product_variant_id),
+  CONSTRAINT fk_ci_cart_id FOREIGN KEY (cart_id) REFERENCES carts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ci_product_id FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ci_variant_id FOREIGN KEY (product_variant_id) REFERENCES product_variants(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_cart_items_cart_id ON cart_items(cart_id);
@@ -62,11 +67,13 @@ CREATE INDEX idx_cart_items_is_saved_for_later ON cart_items(is_saved_for_later)
 
 -- Wishlists table
 CREATE TABLE wishlists (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  user_id CHAR(36) NOT NULL,
+  product_id CHAR(36) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(user_id, product_id)
+  UNIQUE(user_id, product_id),
+  CONSTRAINT fk_wishlist_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_wishlist_product_id FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_wishlists_user_id ON wishlists(user_id);
@@ -75,15 +82,16 @@ CREATE INDEX idx_wishlists_created_at ON wishlists(created_at);
 
 -- Analytics Events table
 CREATE TABLE analytics_events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  id CHAR(36) PRIMARY KEY,
+  user_id CHAR(36),
   session_id VARCHAR(255),
   event_type VARCHAR(50) NOT NULL CHECK (event_type IN ('page_view', 'product_view', 'add_to_cart', 'remove_from_cart', 'checkout_start', 'checkout_complete', 'search', 'click')),
-  event_data JSONB,
-  ip_address INET,
+  event_data JSON,
+  ip_address VARCHAR(45),
   user_agent TEXT,
   referrer VARCHAR(500),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_ae_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_analytics_events_user_id ON analytics_events(user_id);
@@ -93,26 +101,17 @@ CREATE INDEX idx_analytics_events_created_at ON analytics_events(created_at);
 
 -- Email Subscriptions table
 CREATE TABLE email_subscriptions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id CHAR(36) PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_id CHAR(36),
   is_subscribed BOOLEAN DEFAULT TRUE,
   subscription_type VARCHAR(50) DEFAULT 'newsletter' CHECK (subscription_type IN ('newsletter', 'promotions', 'product_updates', 'all')),
   subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  unsubscribed_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  unsubscribed_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_es_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_email_subscriptions_email ON email_subscriptions(email);
 CREATE INDEX idx_email_subscriptions_user_id ON email_subscriptions(user_id);
 CREATE INDEX idx_email_subscriptions_is_subscribed ON email_subscriptions(is_subscribed);
-
--- Apply update triggers
-CREATE TRIGGER update_promotions_updated_at BEFORE UPDATE ON promotions
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_carts_updated_at BEFORE UPDATE ON carts
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_cart_items_updated_at BEFORE UPDATE ON cart_items
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import { AuthRequest, authenticate, authorize } from '../middleware/auth'
 import pool from '../config/database'
 import { AppError } from '../middleware/errorHandler'
-import { v4 as uuidv4 } from 'uuid'
+import crypto from 'crypto'
 
 const router = Router()
 
@@ -14,17 +14,19 @@ router.get('/', authenticate, authorize('seller'), async (req: AuthRequest, res:
     
     let query = `
       SELECT * FROM bulk_upload_jobs
-      WHERE seller_id = $1
+      WHERE seller_id = ?
     `
     const params: any[] = [sellerId]
     
     if (status) {
-      query += ` AND status = $${params.length + 1}`
+      query += ` AND status = ?`
       params.push(status)
     }
     
-    query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
-    params.push(limit, offset)
+    const limitNum = parseInt(limit as string)
+    const offsetNum = parseInt(offset as string)
+    query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
+    params.push(limitNum, offsetNum)
     
     const result = await pool.query(query, params)
     
@@ -41,11 +43,10 @@ router.post('/products', authenticate, authorize('seller'), async (req: AuthRequ
     const { fileUrl, products } = req.body
     
     // Create job record
-    const jobId = uuidv4()
-    const jobResult = await pool.query(
+    const jobId = crypto.randomUUID()
+    await pool.query(
       `INSERT INTO bulk_upload_jobs (job_id, seller_id, type, file_name, file_url, total_rows, status)
-       VALUES ($1, $2, 'products', $3, $4, $5, 'pending')
-       RETURNING *`,
+       VALUES (?, ?, 'products', ?, ?, ?, 'pending')`,
       [jobId, sellerId, fileUrl?.split('/').pop() || 'products.csv', fileUrl, products.length]
     )
     
@@ -71,11 +72,10 @@ router.post('/inventory', authenticate, authorize('seller'), async (req: AuthReq
     const sellerId = req.user!.userId
     const { fileUrl, inventoryUpdates } = req.body
     
-    const jobId = uuidv4()
-    const jobResult = await pool.query(
+    const jobId = crypto.randomUUID()
+    await pool.query(
       `INSERT INTO bulk_upload_jobs (job_id, seller_id, type, file_name, file_url, total_rows, status)
-       VALUES ($1, $2, 'inventory', $3, $4, $5, 'pending')
-       RETURNING *`,
+       VALUES (?, ?, 'inventory', ?, ?, ?, 'pending')`,
       [jobId, sellerId, fileUrl?.split('/').pop() || 'inventory.csv', fileUrl, inventoryUpdates.length]
     )
     
@@ -101,11 +101,10 @@ router.post('/prices', authenticate, authorize('seller'), async (req: AuthReques
     const sellerId = req.user!.userId
     const { fileUrl, priceUpdates } = req.body
     
-    const jobId = uuidv4()
-    const jobResult = await pool.query(
+    const jobId = crypto.randomUUID()
+    await pool.query(
       `INSERT INTO bulk_upload_jobs (job_id, seller_id, type, file_name, file_url, total_rows, status)
-       VALUES ($1, $2, 'prices', $3, $4, $5, 'pending')
-       RETURNING *`,
+       VALUES (?, ?, 'prices', ?, ?, ?, 'pending')`,
       [jobId, sellerId, fileUrl?.split('/').pop() || 'prices.csv', fileUrl, priceUpdates.length]
     )
     
@@ -133,7 +132,7 @@ router.get('/:jobId', authenticate, authorize('seller'), async (req: AuthRequest
     
     const result = await pool.query(
       `SELECT * FROM bulk_upload_jobs
-       WHERE job_id = $1 AND seller_id = $2`,
+       WHERE job_id = ? AND seller_id = ?`,
       [jobId, sellerId]
     )
     
@@ -156,7 +155,7 @@ router.get('/:jobId/errors', authenticate, authorize('seller'), async (req: Auth
     
     const result = await pool.query(
       `SELECT error_log, result_summary FROM bulk_upload_jobs
-       WHERE job_id = $1 AND seller_id = $2`,
+       WHERE job_id = ? AND seller_id = ?`,
       [jobId, sellerId]
     )
     
@@ -209,13 +208,13 @@ router.get('/template/:type', authenticate, authorize('seller'), async (req: Aut
 
 // Async processing functions
 async function processProductsUpload(jobId: string, sellerId: string, products: any[]) {
-  const client = await pool.connect()
+  const client = await pool.getConnection()
   
   try {
-    await client.query('BEGIN')
+    await client.beginTransaction()
     
     await client.query(
-      `UPDATE bulk_upload_jobs SET status = 'processing', started_at = NOW() WHERE job_id = $1`,
+      `UPDATE bulk_upload_jobs SET status = 'processing', started_at = NOW() WHERE job_id = ?`,
       [jobId]
     )
     
@@ -233,7 +232,7 @@ async function processProductsUpload(jobId: string, sellerId: string, products: 
         
         // Check for duplicate slug
         const slugCheck = await client.query(
-          `SELECT id FROM products WHERE slug = $1`,
+          `SELECT id FROM products WHERE slug = ?`,
           [product.slug || product.name.toLowerCase().replace(/\s+/g, '-')]
         )
         
@@ -243,14 +242,15 @@ async function processProductsUpload(jobId: string, sellerId: string, products: 
         }
         
         // Create product
+        const id = crypto.randomUUID()
         await client.query(
           `INSERT INTO products (
-            name, slug, description, base_price, category_id, brand, sku, status, seller_id, specifications
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            id, name, slug, description, base_price, category_id, brand, sku, status, seller_id, specifications
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            product.name, slug, product.description, product.base_price,
+            id, product.name, slug, product.description, product.base_price,
             product.category_id, product.brand, product.sku || `SKU-${Date.now()}`,
-            product.status || 'draft', sellerId, product.specifications ? JSON.parse(product.specifications) : {}
+            product.status || 'draft', sellerId, product.specifications ? (typeof product.specifications === 'string' ? product.specifications : JSON.stringify(product.specifications)) : '{}'
           ]
         )
         
@@ -271,36 +271,36 @@ async function processProductsUpload(jobId: string, sellerId: string, products: 
     
     await client.query(
       `UPDATE bulk_upload_jobs 
-       SET status = $1, 
-           processed_rows = $2,
-           successful_rows = $3,
-           failed_rows = $4,
-           error_log = $5,
+       SET status = ?, 
+           processed_rows = ?,
+           successful_rows = ?,
+           failed_rows = ?,
+           error_log = ?,
            completed_at = NOW()
-       WHERE job_id = $6`,
+       WHERE job_id = ?`,
       [status, processed, successful, failed, JSON.stringify(errors), jobId]
     )
     
-    await client.query('COMMIT')
+    await client.commit()
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.rollback()
     await client.query(
-      `UPDATE bulk_upload_jobs SET status = 'failed', error_log = $1 WHERE job_id = $2`,
+      `UPDATE bulk_upload_jobs SET status = 'failed', error_log = ? WHERE job_id = ?`,
       [JSON.stringify([{ error: 'Processing failed' }]), jobId]
-    )
+    ).catch((e: any) => console.error('Failed to update job status to failed:', e))
   } finally {
     client.release()
   }
 }
 
 async function processInventoryUpload(jobId: string, sellerId: string, updates: any[]) {
-  const client = await pool.connect()
+  const client = await pool.getConnection()
   
   try {
-    await client.query('BEGIN')
+    await client.beginTransaction()
     
     await client.query(
-      `UPDATE bulk_upload_jobs SET status = 'processing', started_at = NOW() WHERE job_id = $1`,
+      `UPDATE bulk_upload_jobs SET status = 'processing', started_at = NOW() WHERE job_id = ?`,
       [jobId]
     )
     
@@ -315,9 +315,9 @@ async function processInventoryUpload(jobId: string, sellerId: string, updates: 
         const productResult = await client.query(
           `SELECT p.id, pv.id as variant_id
            FROM products p
-           LEFT JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = $1
-           WHERE p.sku = $1 OR pv.sku = $1`,
-          [update.sku]
+           LEFT JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = ?
+           WHERE p.sku = ? OR pv.sku = ?`,
+          [update.sku, update.sku, update.sku]
         )
         
         if (productResult.rows.length === 0) {
@@ -331,7 +331,7 @@ async function processInventoryUpload(jobId: string, sellerId: string, updates: 
         const warehouseResult = await client.query(
           `SELECT sw.id FROM seller_warehouses sw
            JOIN seller_profiles sp ON sp.id = sw.seller_id
-           WHERE sw.code = $1 AND sp.user_id = $2`,
+           WHERE sw.code = ? AND sp.user_id = ?`,
           [update.warehouse_code, sellerId]
         )
         
@@ -340,19 +340,19 @@ async function processInventoryUpload(jobId: string, sellerId: string, updates: 
         }
         
         // Update inventory
+        const id = crypto.randomUUID()
         await client.query(
           `INSERT INTO warehouse_inventory (
-            warehouse_id, product_id, variant_id, quantity_available,
+            id, warehouse_id, product_id, variant_id, quantity_available,
             reorder_point, reorder_quantity
-          ) VALUES ($1, $2, $3, $4, $5, $6)
-          ON CONFLICT (warehouse_id, product_id, variant_id)
-          DO UPDATE SET 
-            quantity_available = EXCLUDED.quantity_available,
-            reorder_point = COALESCE(EXCLUDED.reorder_point, warehouse_inventory.reorder_point),
-            reorder_quantity = COALESCE(EXCLUDED.reorder_quantity, warehouse_inventory.reorder_quantity),
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE 
+            quantity_available = VALUES(quantity_available),
+            reorder_point = COALESCE(VALUES(reorder_point), reorder_point),
+            reorder_quantity = COALESCE(VALUES(reorder_quantity), reorder_quantity),
             updated_at = NOW()`,
           [
-            warehouseResult.rows[0].id, productId, variantId,
+            id, warehouseResult.rows[0].id, productId, variantId,
             update.quantity, update.reorder_point, update.reorder_quantity
           ]
         )
@@ -374,36 +374,36 @@ async function processInventoryUpload(jobId: string, sellerId: string, updates: 
     
     await client.query(
       `UPDATE bulk_upload_jobs 
-       SET status = $1, 
-           processed_rows = $2,
-           successful_rows = $3,
-           failed_rows = $4,
-           error_log = $5,
+       SET status = ?, 
+           processed_rows = ?,
+           successful_rows = ?,
+           failed_rows = ?,
+           error_log = ?,
            completed_at = NOW()
-       WHERE job_id = $6`,
+       WHERE job_id = ?`,
       [status, processed, successful, failed, JSON.stringify(errors), jobId]
     )
     
-    await client.query('COMMIT')
+    await client.commit()
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.rollback()
     await client.query(
-      `UPDATE bulk_upload_jobs SET status = 'failed', error_log = $1 WHERE job_id = $2`,
+      `UPDATE bulk_upload_jobs SET status = 'failed', error_log = ? WHERE job_id = ?`,
       [JSON.stringify([{ error: 'Processing failed' }]), jobId]
-    )
+    ).catch((e: any) => console.error('Failed to update job status to failed:', e))
   } finally {
     client.release()
   }
 }
 
 async function processPriceUpload(jobId: string, sellerId: string, updates: any[]) {
-  const client = await pool.connect()
+  const client = await pool.getConnection()
   
   try {
-    await client.query('BEGIN')
+    await client.beginTransaction()
     
     await client.query(
-      `UPDATE bulk_upload_jobs SET status = 'processing', started_at = NOW() WHERE job_id = $1`,
+      `UPDATE bulk_upload_jobs SET status = 'processing', started_at = NOW() WHERE job_id = ?`,
       [jobId]
     )
     
@@ -417,7 +417,7 @@ async function processPriceUpload(jobId: string, sellerId: string, updates: any[
         // Find product by SKU
         const productResult = await client.query(
           `SELECT p.id FROM products p
-           WHERE p.sku = $1 AND p.seller_id = $2`,
+           WHERE p.sku = ? AND p.seller_id = ?`,
           [update.sku, sellerId]
         )
         
@@ -428,12 +428,12 @@ async function processPriceUpload(jobId: string, sellerId: string, updates: any[
         // Update price
         await client.query(
           `UPDATE products 
-           SET base_price = $1,
-               sale_price = $2,
-               sale_starts_at = $3,
-               sale_ends_at = $4,
+           SET base_price = ?,
+               sale_price = ?,
+               sale_starts_at = ?,
+               sale_ends_at = ?,
                updated_at = NOW()
-           WHERE id = $5`,
+           WHERE id = ?`,
           [
             update.new_price, update.sale_price, update.sale_start,
             update.sale_end, productResult.rows[0].id
@@ -457,23 +457,23 @@ async function processPriceUpload(jobId: string, sellerId: string, updates: any[
     
     await client.query(
       `UPDATE bulk_upload_jobs 
-       SET status = $1, 
-           processed_rows = $2,
-           successful_rows = $3,
-           failed_rows = $4,
-           error_log = $5,
+       SET status = ?, 
+           processed_rows = ?,
+           successful_rows = ?,
+           failed_rows = ?,
+           error_log = ?,
            completed_at = NOW()
-       WHERE job_id = $6`,
+       WHERE job_id = ?`,
       [status, processed, successful, failed, JSON.stringify(errors), jobId]
     )
     
-    await client.query('COMMIT')
+    await client.commit()
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.rollback()
     await client.query(
-      `UPDATE bulk_upload_jobs SET status = 'failed', error_log = $1 WHERE job_id = $2`,
+      `UPDATE bulk_upload_jobs SET status = 'failed', error_log = ? WHERE job_id = ?`,
       [JSON.stringify([{ error: 'Processing failed' }]), jobId]
-    )
+    ).catch((e: any) => console.error('Failed to update job status to failed:', e))
   } finally {
     client.release()
   }

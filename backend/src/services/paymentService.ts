@@ -1,5 +1,6 @@
 import Stripe from 'stripe'
 import pool from '../config/database'
+import crypto from 'crypto'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
@@ -50,7 +51,7 @@ export class PaymentService {
     currency: string
   }> {
     const orderResult = await pool.query(
-      'SELECT id, total_amount, currency, status FROM orders WHERE id = $1',
+      'SELECT id, total_amount, currency, status FROM orders WHERE id = ?',
       [data.orderId]
     )
     if (orderResult.rows.length === 0) throw new Error('Order not found')
@@ -71,23 +72,13 @@ export class PaymentService {
       automatic_payment_methods: { enabled: true },
     })
 
-    // Upsert a pending payment record (check-then-insert/update to avoid needing unique constraint)
-    const existingPayment = await pool.query(
-      'SELECT id FROM payments WHERE order_id = $1 LIMIT 1',
-      [data.orderId]
+    // Upsert a pending payment record
+    await pool.query(
+      `INSERT INTO payments (id, order_id, payment_gateway, payment_method, amount, currency, status, transaction_id)
+       VALUES (?, ?, 'stripe', 'credit_card', ?, ?, 'pending', ?)
+       ON DUPLICATE KEY UPDATE transaction_id = VALUES(transaction_id), status = 'pending', updated_at = CURRENT_TIMESTAMP`,
+      [crypto.randomUUID(), data.orderId, order.total_amount, currency, intent.id]
     )
-    if (existingPayment.rows.length > 0) {
-      await pool.query(
-        `UPDATE payments SET transaction_id = $1, status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE order_id = $2`,
-        [intent.id, data.orderId]
-      )
-    } else {
-      await pool.query(
-        `INSERT INTO payments (order_id, payment_gateway, payment_method, amount, currency, status, transaction_id)
-         VALUES ($1, 'stripe', 'credit_card', $2, $3, 'pending', $4)`,
-        [data.orderId, order.total_amount, currency, intent.id]
-      )
-    }
 
     return {
       clientSecret: intent.client_secret!,
@@ -112,37 +103,37 @@ export class PaymentService {
       throw new Error(`Payment not succeeded. Status: ${intent.status}`)
     }
 
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       await client.query(
         `UPDATE payments SET status = 'completed', updated_at = CURRENT_TIMESTAMP
-         WHERE order_id = $1 AND transaction_id = $2`,
+         WHERE order_id = ? AND transaction_id = ?`,
         [data.orderId, data.paymentIntentId]
       )
 
       await client.query(
         `UPDATE orders SET status = 'payment_confirmed', updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1`,
+         WHERE id = ?`,
         [data.orderId]
       )
 
       await client.query(
-        `INSERT INTO order_status_history (order_id, status, notes) VALUES ($1, $2, $3)`,
-        [data.orderId, 'payment_confirmed', 'Payment confirmed via Stripe']
+        `INSERT INTO order_status_history (id, order_id, status, notes) VALUES (?, ?, ?)`,
+        [crypto.randomUUID(), data.orderId, 'payment_confirmed', 'Payment confirmed via Stripe']
       )
 
-      await client.query('COMMIT')
+      await client.commit()
     } catch (err) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw err
     } finally {
       client.release()
     }
 
     const result = await pool.query(
-      'SELECT * FROM payments WHERE order_id = $1 AND transaction_id = $2',
+      'SELECT * FROM payments WHERE order_id = ? AND transaction_id = ?',
       [data.orderId, data.paymentIntentId]
     )
     return this.mapPayment(result.rows[0])
@@ -173,30 +164,30 @@ export class PaymentService {
         const orderId = intent.metadata?.orderId
         if (!orderId) break
 
-        const client = await pool.connect()
+        const client = await pool.getConnection()
         try {
-          await client.query('BEGIN')
+          await client.beginTransaction()
           await client.query(
             `UPDATE payments SET status = 'completed', updated_at = CURRENT_TIMESTAMP
-             WHERE order_id = $1 AND transaction_id = $2 AND status != 'completed'`,
+             WHERE order_id = ? AND transaction_id = ? AND status != 'completed'`,
             [orderId, intent.id]
           )
           await client.query(
             `UPDATE orders SET status = 'payment_confirmed', updated_at = CURRENT_TIMESTAMP
-             WHERE id = $1 AND status = 'placed'`,
+             WHERE id = ? AND status = 'placed'`,
             [orderId]
           )
           try {
             await client.query(
-              `INSERT INTO order_status_history (order_id, status, notes) VALUES ($1, $2, $3)`,
-              [orderId, 'payment_confirmed', 'Payment confirmed via Stripe webhook']
+              `INSERT INTO order_status_history (id, order_id, status, notes) VALUES (?, ?, ?)`,
+              [crypto.randomUUID(), orderId, 'payment_confirmed', 'Payment confirmed via Stripe webhook']
             )
           } catch {
             // Ignore duplicate entry errors
           }
-          await client.query('COMMIT')
+          await client.commit()
         } catch (err) {
-          await client.query('ROLLBACK')
+          await client.rollback()
           console.error('Webhook DB error:', err)
         } finally {
           client.release()
@@ -211,8 +202,8 @@ export class PaymentService {
 
         await pool.query(
           `UPDATE payments SET status = 'failed',
-             error_message = $1, updated_at = CURRENT_TIMESTAMP
-           WHERE order_id = $2 AND transaction_id = $3`,
+             error_message = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE order_id = ? AND transaction_id = ?`,
           [intent.last_payment_error?.message || 'Payment failed', orderId, intent.id]
         )
         break
@@ -226,7 +217,7 @@ export class PaymentService {
 
   async getPaymentByOrderId(orderId: string): Promise<Payment | null> {
     const result = await pool.query(
-      'SELECT * FROM payments WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1',
+      'SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1',
       [orderId]
     )
     if (result.rows.length === 0) return null
@@ -234,16 +225,17 @@ export class PaymentService {
   }
 
   async processRefund(data: RefundDTO): Promise<any> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
-      const paymentResult = await client.query(
-        'SELECT * FROM payments WHERE id = $1', [data.paymentId]
+      const [paymentRows] = await client.query(
+        'SELECT * FROM payments WHERE id = ?', [data.paymentId]
       )
-      if (paymentResult.rows.length === 0) throw new Error('Payment not found')
+      const paymentResult = paymentRows as any[]
+      if (paymentResult.length === 0) throw new Error('Payment not found')
 
-      const payment = paymentResult.rows[0]
+      const payment = paymentResult[0]
       if (payment.status !== 'completed') throw new Error('Payment is not completed')
       if (data.amount > parseFloat(payment.amount)) throw new Error('Refund amount exceeds payment amount')
 
@@ -255,24 +247,27 @@ export class PaymentService {
         reason: 'requested_by_customer',
       })
 
-      const refundResult = await client.query(
-        `INSERT INTO refunds (payment_id, order_id, amount, reason, status, processed_by, refund_transaction_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      const id = crypto.randomUUID()
+      await client.query(
+        `INSERT INTO refunds (id, payment_id, order_id, amount, reason, status, processed_by, refund_transaction_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          data.paymentId, payment.order_id, data.amount,
+          id, data.paymentId, payment.order_id, data.amount,
           data.reason, 'completed', data.processedBy, stripeRefund.id,
         ]
       )
 
       if (data.amount >= parseFloat(payment.amount)) {
         await client.query(
-          `UPDATE payments SET status = 'refunded', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+          `UPDATE payments SET status = 'refunded', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
           [data.paymentId]
         )
       }
 
-      await client.query('COMMIT')
-      const refund = refundResult.rows[0]
+      await client.commit()
+      
+      const [refundRows] = await client.query('SELECT * FROM refunds WHERE id = ?', [id])
+      const refund = (refundRows as any[])[0]
       return {
         id: refund.id,
         paymentId: refund.payment_id,
@@ -283,7 +278,7 @@ export class PaymentService {
         refundTransactionId: refund.refund_transaction_id,
       }
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()

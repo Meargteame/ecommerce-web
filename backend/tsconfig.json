@@ -18,6 +18,7 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noImplicitReturns": false,
+    "noImplicitAny": false,
     "noFallthroughCasesInSwitch": true,
     "types": ["node", "jest"]
   },

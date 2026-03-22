@@ -1,5 +1,6 @@
 import pool from '../config/database'
 import { cache } from '../config/redis'
+import crypto from 'crypto'
 
 interface CreateProductDTO {
   name: string
@@ -78,17 +79,17 @@ export class ProductService {
     } = data
 
     // Auto-generate SKU if not provided
-    const sku = data.sku || `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
+    const sku = data.sku || `SKU-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`
 
     // Check if slug already exists
-    const slugCheck = await pool.query('SELECT id FROM products WHERE slug = $1', [slug])
+    const slugCheck = await pool.query('SELECT id FROM products WHERE slug = ?', [slug])
 
     if (slugCheck.rows.length > 0) {
       throw new Error('Product with this slug already exists')
     }
 
     // Verify category exists
-    const categoryCheck = await pool.query('SELECT id FROM categories WHERE id = $1', [categoryId])
+    const categoryCheck = await pool.query('SELECT id FROM categories WHERE id = ?', [categoryId])
 
     if (categoryCheck.rows.length === 0) {
       throw new Error('Category not found')
@@ -105,15 +106,17 @@ export class ProductService {
     }
 
     const stockQuantity = (data as any).stock_quantity ?? (data as any).stockQuantity ?? 0
+    const id = crypto.randomUUID()
 
-    const result = await pool.query(
-      `INSERT INTO products (seller_id, name, slug, description, specifications, base_price, price, sku, category_id, brand, status, stock_quantity)
-       VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11)
-       RETURNING *`,
-      [resolvedSellerId, name, slug, description || null, JSON.stringify(specifications || {}), basePrice, sku, categoryId, brand || null, status, stockQuantity]
+    await pool.query(
+      `INSERT INTO products (id, seller_id, name, slug, description, specifications, base_price, price, sku, category_id, brand, status, stock_quantity)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, resolvedSellerId, name, slug, description || null, JSON.stringify(specifications || {}), basePrice, basePrice, sku, categoryId, brand || null, status, stockQuantity]
     )
 
-    return this.mapProduct(result.rows[0])
+    const product = await this.getProduct(id)
+    if (!product) throw new Error('Product not found after creation')
+    return product
   }
 
   async getProduct(id: string, incrementView = false): Promise<Product | null> {
@@ -126,7 +129,7 @@ export class ProductService {
       
       // Increment view count asynchronously if needed
       if (incrementView) {
-        pool.query('UPDATE products SET view_count = view_count + 1 WHERE id = $1', [id]).catch(() => {})
+        pool.query('UPDATE products SET view_count = view_count + 1 WHERE id = ?', [id]).catch(() => {})
       }
 
       return product
@@ -134,7 +137,7 @@ export class ProductService {
 
     // Get from database
     const result = await pool.query(
-      'SELECT p.* FROM products p JOIN users u ON u.id = p.seller_id WHERE p.id = $1 AND u.account_status = $2', 
+      'SELECT p.* FROM products p JOIN users u ON u.id = p.seller_id WHERE p.id = ? AND u.account_status = ?', 
       [id, 'active']
     )
 
@@ -149,7 +152,7 @@ export class ProductService {
 
     // Increment view count if needed
     if (incrementView) {
-      await pool.query('UPDATE products SET view_count = view_count + 1 WHERE id = $1', [id])
+      await pool.query('UPDATE products SET view_count = view_count + 1 WHERE id = ?', [id])
     }
 
     return product
@@ -157,7 +160,7 @@ export class ProductService {
 
   async getProductBySlug(slug: string, incrementView = false): Promise<Product | null> {
     const result = await pool.query(
-      'SELECT p.* FROM products p JOIN users u ON u.id = p.seller_id WHERE p.slug = $1 AND u.account_status = $2', 
+      'SELECT p.* FROM products p JOIN users u ON u.id = p.seller_id WHERE p.slug = ? AND u.account_status = ?', 
       [slug, 'active']
     )
 
@@ -169,7 +172,7 @@ export class ProductService {
 
     // Increment view count if needed
     if (incrementView) {
-      await pool.query('UPDATE products SET view_count = view_count + 1 WHERE id = $1', [product.id])
+      await pool.query('UPDATE products SET view_count = view_count + 1 WHERE id = ?', [product.id])
     }
 
     return product
@@ -178,7 +181,6 @@ export class ProductService {
   async updateProduct(id: string, data: UpdateProductDTO): Promise<Product> {
     const updates: string[] = []
     const values: any[] = []
-    let paramCount = 1
 
     const fields: (keyof UpdateProductDTO)[] = [
       'name',
@@ -206,15 +208,13 @@ export class ProductService {
 
     fields.forEach((field, index) => {
       if (data[field] !== undefined) {
-        updates.push(`${dbFields[index]} = $${paramCount}`)
+        updates.push(`${dbFields[index]} = ?`)
         
         if (field === 'specifications') {
           values.push(JSON.stringify(data[field]))
         } else {
           values.push(data[field])
         }
-        
-        paramCount++
       }
     })
 
@@ -228,35 +228,35 @@ export class ProductService {
     const result = await pool.query(
       `UPDATE products 
        SET ${updates.join(', ')}
-       WHERE id = $${paramCount}
-       RETURNING *`,
+       WHERE id = ?`,
       values
     )
 
-    if (result.rows.length === 0) {
+    if ((result as any).affectedRows === 0) {
       throw new Error('Product not found')
     }
-
-    const product = this.mapProduct(result.rows[0])
 
     // Invalidate cache
     await cache.del(`product:${id}`)
 
+    const product = await this.getProduct(id)
+    if (!product) throw new Error('Product not found after update')
     return product
   }
 
   async deleteProduct(id: string): Promise<void> {
     try {
-      const result = await pool.query('DELETE FROM products WHERE id = $1', [id])
+      const result = await pool.query('DELETE FROM products WHERE id = ?', [id])
 
-      if (result.rowCount === 0) {
+      if ((result as any).affectedRows === 0) {
         throw new Error('Product not found')
       }
 
       // Invalidate cache
       await cache.del(`product:${id}`)
     } catch (error: any) {
-      if (error.code === '23503') {
+      // MySQL error code for FK violation is 1451
+      if (error.code === '1451' || error.code === '23503') {
         throw new Error('Cannot delete this product because it is linked to past orders. Please change status to Archived instead.')
       }
       throw error
@@ -278,18 +278,16 @@ export class ProductService {
     // Build conditions with p. prefix for use in JOIN queries
     const conditions: string[] = ["u.account_status = 'active'"]
     const values: any[] = []
-    let p = 1
 
-    if (status)                  { conditions.push(`p.status = $${p++}`);           values.push(status) }
-    if (categoryId)              { conditions.push(`p.category_id = $${p++}`);      values.push(categoryId) }
-    if (brand)                   { conditions.push(`p.brand = $${p++}`);            values.push(brand) }
-    if (minPrice !== undefined)  { conditions.push(`p.base_price >= $${p++}`);      values.push(minPrice) }
-    if (maxPrice !== undefined)  { conditions.push(`p.base_price <= $${p++}`);      values.push(maxPrice) }
-    if (minRating !== undefined) { conditions.push(`p.average_rating >= $${p++}`);  values.push(minRating) }
+    if (status)                  { conditions.push(`p.status = ?`);           values.push(status) }
+    if (categoryId)              { conditions.push(`p.category_id = ?`);      values.push(categoryId) }
+    if (brand)                   { conditions.push(`p.brand = ?`);            values.push(brand) }
+    if (minPrice !== undefined)  { conditions.push(`p.base_price >= ?`);      values.push(minPrice) }
+    if (maxPrice !== undefined)  { conditions.push(`p.base_price <= ?`);      values.push(maxPrice) }
+    if (minRating !== undefined) { conditions.push(`p.average_rating >= ?`);  values.push(minRating) }
     if (search) {
-      conditions.push(`(p.name ILIKE $${p} OR p.description ILIKE $${p})`)
-      values.push('%' + search + '%')
-      p++
+      conditions.push(`(p.name LIKE ? OR p.description LIKE ?)`)
+      values.push('%' + search + '%', '%' + search + '%')
     }
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''
@@ -302,7 +300,7 @@ export class ProductService {
       case 'popular':    orderBy = 'ORDER BY p.view_count DESC'; break
     }
 
-    // Count query — uses same conditions (already p. prefixed)
+    // Count query
     const countResult = await pool.query(
       `SELECT COUNT(*) as total FROM products p JOIN users u ON u.id = p.seller_id ${whereClause}`,
       values
@@ -310,7 +308,7 @@ export class ProductService {
     const total = parseInt(countResult.rows[0].total)
 
     // Main query with images and category
-    values.push(limit, offset)
+    const mainValues = [...values, limit, offset]
     const result = await pool.query(
       `SELECT p.*, c.name as category_name,
               (SELECT pi.url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = TRUE LIMIT 1) as image_url
@@ -319,11 +317,11 @@ export class ProductService {
        LEFT JOIN categories c ON c.id = p.category_id
        ${whereClause}
        ${orderBy}
-       LIMIT $${p} OFFSET $${p + 1}`,
-      values
+       LIMIT ? OFFSET ?`,
+      mainValues
     )
 
-    const products = result.rows.map((row) => ({
+    const products = result.rows.map((row: any) => ({
       ...this.mapProduct(row),
       image_url: row.image_url,
       category_name: row.category_name,
@@ -340,17 +338,19 @@ export class ProductService {
   }
 
   async createCategory(data: { name: string; slug: string; description?: string; parentId?: string; imageUrl?: string; displayOrder?: number }): Promise<Category> {
-    const result = await pool.query(
-      `INSERT INTO categories (name, slug, description, parent_id, image_url, display_order)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [data.name, data.slug, data.description || null, data.parentId || null, data.imageUrl || null, data.displayOrder || 0]
+    const id = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO categories (id, name, slug, description, parent_id, image_url, display_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, data.name, data.slug, data.description || null, data.parentId || null, data.imageUrl || null, data.displayOrder || 0]
     )
 
     // Invalidate categories cache
     await cache.del('categories:all')
 
-    return this.mapCategory(result.rows[0])
+    const category = await this.getCategory(id)
+    if (!category) throw new Error('Category not found after creation')
+    return category
   }
 
   // Category Management
@@ -367,7 +367,7 @@ export class ProductService {
       'SELECT * FROM categories ORDER BY display_order ASC, name ASC'
     )
 
-    const categories = result.rows.map(this.mapCategory)
+    const categories = result.rows.map((r: any) => this.mapCategory(r))
 
     // Cache categories
     await cache.set(cacheKey, this.CATEGORY_CACHE_TTL, JSON.stringify(categories))
@@ -376,7 +376,7 @@ export class ProductService {
   }
 
   async getCategory(id: string): Promise<Category | null> {
-    const result = await pool.query('SELECT * FROM categories WHERE id = $1', [id])
+    const result = await pool.query('SELECT * FROM categories WHERE id = ?', [id])
 
     if (result.rows.length === 0) {
       return null
@@ -386,7 +386,7 @@ export class ProductService {
   }
 
   async getCategoryBySlug(slug: string): Promise<Category | null> {
-    const result = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug])
+    const result = await pool.query('SELECT * FROM categories WHERE slug = ?', [slug])
 
     if (result.rows.length === 0) {
       return null
@@ -404,12 +404,12 @@ export class ProductService {
     const result = await pool.query(
       `SELECT id, product_id, url as image_url, alt_text, display_order, is_primary, created_at
        FROM product_images 
-       WHERE product_id = $1
+       WHERE product_id = ?
        ORDER BY is_primary DESC, display_order ASC`,
       [productId]
     )
 
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       productId: row.product_id,
       imageUrl: row.image_url,
@@ -426,12 +426,12 @@ export class ProductService {
       `SELECT id, product_id, sku, variant_name, attributes, price_adjustment,
               stock_quantity, low_stock_threshold, weight_grams, created_at, updated_at
        FROM product_variants 
-       WHERE product_id = $1
+       WHERE product_id = ?
        ORDER BY variant_name ASC`,
       [productId]
     )
 
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       productId: row.product_id,
       sku: row.sku,
@@ -456,7 +456,7 @@ export class ProductService {
     attributes?: Record<string, any>
   }): Promise<any> {
     // Verify product exists
-    const productCheck = await pool.query('SELECT id, base_price, price FROM products WHERE id = $1', [productId])
+    const productCheck = await pool.query('SELECT id, base_price, price FROM products WHERE id = ?', [productId])
     if (productCheck.rows.length === 0) {
       throw new Error('Product not found')
     }
@@ -464,15 +464,17 @@ export class ProductService {
     const basePrice = parseFloat(productCheck.rows[0].base_price || productCheck.rows[0].price || 0)
     const priceAdjustment = data.priceAdjustment || 0
     const variantPrice = basePrice + priceAdjustment
+    const id = crypto.randomUUID()
 
-    const result = await pool.query(
+    await pool.query(
       `INSERT INTO product_variants 
-        (product_id, sku, name, variant_name, price, price_adjustment, stock_quantity, weight, weight_grams, attributes)
-       VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING *`,
+        (id, product_id, sku, name, variant_name, price, price_adjustment, stock_quantity, weight, weight_grams, attributes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        id,
         productId,
         data.sku,
+        data.variantName,
         data.variantName,
         variantPrice,
         priceAdjustment,
@@ -483,6 +485,7 @@ export class ProductService {
       ]
     )
 
+    const result = await pool.query('SELECT * FROM product_variants WHERE id = ?', [id])
     const row = result.rows[0]
     return {
       id: row.id,
@@ -507,7 +510,7 @@ export class ProductService {
        ORDER BY brand ASC`
     )
 
-    return result.rows.map((row) => row.brand)
+    return result.rows.map((row: any) => row.brand)
   }
 
   private mapProduct(row: any): Product & { stockQuantity: number; price: number; sku?: string } {

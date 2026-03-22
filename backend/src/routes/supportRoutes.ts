@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { AuthRequest, authenticate } from '../middleware/auth'
 import pool from '../config/database'
+import crypto from 'crypto'
 
 const router = Router()
 router.use(authenticate)
@@ -11,7 +12,7 @@ router.get('/tickets', async (req: AuthRequest, res: Response) => {
     const userId = req.user!.userId
     const result = await pool.query(
       `SELECT id, subject, message, status, priority, admin_response, created_at, updated_at
-       FROM support_tickets WHERE user_id = $1 ORDER BY created_at DESC`,
+       FROM support_tickets WHERE user_id = ? ORDER BY created_at DESC`,
       [userId]
     )
     res.json({ data: { tickets: result.rows } })
@@ -29,12 +30,20 @@ router.post('/tickets', async (req: AuthRequest, res: Response) => {
       res.status(400).json({ error: 'subject and message are required' })
       return
     }
-    const result = await pool.query(
-      `INSERT INTO support_tickets (user_id, subject, message, priority, status)
-       VALUES ($1, $2, $3, $4, 'open')
-       RETURNING id, subject, message, status, priority, admin_response, created_at, updated_at`,
-      [userId, subject, message, priority]
+    
+    const id = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO support_tickets (id, user_id, subject, message, priority, status)
+       VALUES (?, ?, ?, ?, ?, 'open')`,
+      [id, userId, subject, message, priority]
     )
+    
+    const result = await pool.query(
+      `SELECT id, subject, message, status, priority, admin_response, created_at, updated_at
+       FROM support_tickets WHERE id = ?`,
+      [id]
+    )
+    
     res.status(201).json({ data: result.rows[0] })
   } catch {
     res.status(500).json({ error: 'Failed to create ticket' })
@@ -47,7 +56,7 @@ router.get('/tickets/:id', async (req: AuthRequest, res: Response) => {
     const userId = req.user!.userId
     const result = await pool.query(
       `SELECT id, subject, message, status, priority, admin_response, created_at, updated_at
-       FROM support_tickets WHERE id = $1 AND user_id = $2`,
+       FROM support_tickets WHERE id = ? AND user_id = ?`,
       [req.params.id, userId]
     )
     if (result.rows.length === 0) {

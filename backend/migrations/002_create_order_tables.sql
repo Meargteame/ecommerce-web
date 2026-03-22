@@ -3,10 +3,10 @@
 
 -- Orders table
 CREATE TABLE orders (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  user_id CHAR(36) NOT NULL,
   order_number VARCHAR(50) UNIQUE NOT NULL,
-  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded')),
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'placed', 'confirmed', 'payment_confirmed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled', 'refunded')),
   payment_status VARCHAR(20) DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'failed', 'refunded')),
   
   -- Pricing
@@ -41,12 +41,13 @@ CREATE TABLE orders (
   admin_notes TEXT,
   
   -- Timestamps
-  confirmed_at TIMESTAMP,
-  shipped_at TIMESTAMP,
-  delivered_at TIMESTAMP,
-  cancelled_at TIMESTAMP,
+  confirmed_at TIMESTAMP NULL,
+  shipped_at TIMESTAMP NULL,
+  delivered_at TIMESTAMP NULL,
+  cancelled_at TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_orders_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_orders_user_id ON orders(user_id);
@@ -57,10 +58,10 @@ CREATE INDEX idx_orders_created_at ON orders(created_at);
 
 -- Order Items table
 CREATE TABLE order_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
-  product_variant_id UUID REFERENCES product_variants(id) ON DELETE RESTRICT,
+  id CHAR(36) PRIMARY KEY,
+  order_id CHAR(36) NOT NULL,
+  product_id CHAR(36) NOT NULL,
+  product_variant_id CHAR(36),
   
   -- Product snapshot at time of order
   product_name VARCHAR(255) NOT NULL,
@@ -75,7 +76,10 @@ CREATE TABLE order_items (
   -- Additional Info
   product_image_url VARCHAR(500),
   
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_order_items_order_id FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_order_items_product_id FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_order_items_variant_id FOREIGN KEY (product_variant_id) REFERENCES product_variants(id) ON DELETE RESTRICT
 );
 
 CREATE INDEX idx_order_items_order_id ON order_items(order_id);
@@ -83,17 +87,15 @@ CREATE INDEX idx_order_items_product_id ON order_items(product_id);
 
 -- Order Status History table
 CREATE TABLE order_status_history (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  order_id CHAR(36) NOT NULL,
   status VARCHAR(20) NOT NULL,
   notes TEXT,
-  changed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  changed_by CHAR(36),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_osh_order_id FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_osh_changed_by FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_order_status_history_order_id ON order_status_history(order_id);
 CREATE INDEX idx_order_status_history_created_at ON order_status_history(created_at);
-
--- Apply update trigger
-CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

@@ -1,7 +1,7 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import fs from 'fs'
 import path from 'path'
-import { v4 as uuidv4 } from 'uuid'
+import crypto from 'crypto'
 import sharp from 'sharp'
 
 const USE_S3 = !!(
@@ -52,7 +52,7 @@ export async function uploadFile(
     ext = '.webp'
   }
 
-  const key = `products/${uuidv4()}${ext}`
+  const key = `products/${crypto.randomUUID()}${ext}`
 
   if (USE_S3 && s3) {
     await s3.send(
@@ -70,13 +70,15 @@ export async function uploadFile(
   }
 
   // Local fallback
-  const localPath = path.join(LOCAL_UPLOAD_DIR, path.basename(key))
+  const localBaseName = path.basename(key)
+  const localPath = path.join(LOCAL_UPLOAD_DIR, localBaseName)
+  // Ensure the directory exists (though LOCAL_UPLOAD_DIR is already checked)
   fs.mkdirSync(path.dirname(localPath), { recursive: true })
   fs.writeFileSync(localPath, processedBuffer)
 
   const baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`
-  const url = `${baseUrl}/uploads/${path.basename(key)}`
-  return { url, key: path.basename(key), storage: 'local' }
+  const url = `${baseUrl}/uploads/${localBaseName}`
+  return { url, key: localBaseName, storage: 'local' }
 }
 
 export async function deleteFile(key: string, storage: 's3' | 'local'): Promise<void> {

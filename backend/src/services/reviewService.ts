@@ -1,4 +1,5 @@
 import pool from '../config/database'
+import crypto from 'crypto'
 
 interface CreateReviewDTO {
   productId: string
@@ -93,40 +94,42 @@ interface PaginatedResult<T> {
 
 export class ReviewService {
   async createReview(data: CreateReviewDTO): Promise<Review> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       // Check if user already reviewed this product
-      const existingReview = await client.query(
-        'SELECT id FROM reviews WHERE product_id = $1 AND user_id = $2',
+      const [existing] = await client.query(
+        'SELECT id FROM reviews WHERE product_id = ? AND user_id = ?',
         [data.productId, data.userId]
       )
+      const existingReviews = existing as any[]
 
-      if (existingReview.rows.length > 0) {
+      if (existingReviews.length > 0) {
         throw new Error('You have already reviewed this product')
       }
 
       // Verify purchase if orderId provided
       let isVerifiedPurchase = false
       if (data.orderId) {
-        const purchaseCheck = await client.query(
+        const [purchase] = await client.query(
           `SELECT oi.id FROM order_items oi
            JOIN orders o ON oi.order_id = o.id
-           WHERE o.id = $1 AND o.user_id = $2 AND oi.product_id = $3 AND o.status = 'delivered'`,
+           WHERE o.id = ? AND o.user_id = ? AND oi.product_id = ? AND o.status = 'delivered'`,
           [data.orderId, data.userId, data.productId]
         )
-        isVerifiedPurchase = purchaseCheck.rows.length > 0
+        isVerifiedPurchase = (purchase as any[]).length > 0
       }
 
       // Create review
-      const reviewResult = await client.query(
+      const id = crypto.randomUUID()
+      await client.query(
         `INSERT INTO reviews (
-          product_id, user_id, order_id, rating, title, comment, is_verified_purchase
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING *`,
+          id, product_id, user_id, order_id, rating, title, comment, is_verified_purchase
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          id,
           data.productId,
           data.userId,
           data.orderId || null,
@@ -140,11 +143,13 @@ export class ReviewService {
       // Update product average rating
       await this.updateProductRating(data.productId, client)
 
-      await client.query('COMMIT')
+      await client.commit()
 
-      return this.mapReview(reviewResult.rows[0])
+      const review = await this.getReviewById(id)
+      if (!review) throw new Error('Failed to retrieve review after creation')
+      return review
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -159,23 +164,23 @@ export class ReviewService {
 
     // Get total count
     const countResult = await pool.query(
-      'SELECT COUNT(*) FROM reviews WHERE product_id = $1 AND is_approved = true',
+      'SELECT COUNT(*) as count FROM reviews WHERE product_id = ? AND is_approved = true',
       [productId]
     )
-    const total = parseInt(countResult.rows[0].count)
+    const total = parseInt((countResult.rows[0] as any).count)
 
     // Get reviews with user info
     const reviewsResult = await pool.query(
       `SELECT r.*, u.first_name, u.last_name
        FROM reviews r
        LEFT JOIN users u ON r.user_id = u.id
-       WHERE r.product_id = $1 AND r.is_approved = true
+       WHERE r.product_id = ? AND r.is_approved = true
        ORDER BY r.created_at DESC
-       LIMIT $2 OFFSET $3`,
+       LIMIT ? OFFSET ?`,
       [productId, limit, offset]
     )
 
-    const reviews = reviewsResult.rows.map(row => ({
+    const reviews = reviewsResult.rows.map((row: any) => ({
       ...this.mapReview(row),
       user: {
         firstName: row.first_name,
@@ -196,7 +201,7 @@ export class ReviewService {
       `SELECT r.*, u.first_name, u.last_name
        FROM reviews r
        LEFT JOIN users u ON r.user_id = u.id
-       WHERE r.id = $1`,
+       WHERE r.id = ?`,
       [id]
     )
 
@@ -215,43 +220,40 @@ export class ReviewService {
   }
 
   async updateReview(id: string, userId: string, data: UpdateReviewDTO): Promise<Review> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       // Verify ownership
-      const ownerCheck = await client.query(
-        'SELECT product_id FROM reviews WHERE id = $1 AND user_id = $2',
+      const [check] = await client.query(
+        'SELECT product_id FROM reviews WHERE id = ? AND user_id = ?',
         [id, userId]
       )
+      const rows = check as any[]
 
-      if (ownerCheck.rows.length === 0) {
+      if (rows.length === 0) {
         throw new Error('Review not found or unauthorized')
       }
 
-      const productId = ownerCheck.rows[0].product_id
+      const productId = rows[0].product_id
 
       // Build update query
       const updates: string[] = []
       const values: any[] = []
-      let paramCount = 0
 
       if (data.rating !== undefined) {
-        paramCount++
-        updates.push(`rating = $${paramCount}`)
+        updates.push('rating = ?')
         values.push(data.rating)
       }
 
       if (data.title !== undefined) {
-        paramCount++
-        updates.push(`title = $${paramCount}`)
+        updates.push('title = ?')
         values.push(data.title)
       }
 
       if (data.comment !== undefined) {
-        paramCount++
-        updates.push(`comment = $${paramCount}`)
+        updates.push('comment = ?')
         values.push(data.comment)
       }
 
@@ -260,11 +262,10 @@ export class ReviewService {
       }
 
       updates.push('updated_at = CURRENT_TIMESTAMP')
-      paramCount++
       values.push(id)
 
-      const reviewResult = await client.query(
-        `UPDATE reviews SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+      await client.query(
+        `UPDATE reviews SET ${updates.join(', ')} WHERE id = ?`,
         values
       )
 
@@ -273,11 +274,13 @@ export class ReviewService {
         await this.updateProductRating(productId, client)
       }
 
-      await client.query('COMMIT')
+      await client.commit()
 
-      return this.mapReview(reviewResult.rows[0])
+      const review = await this.getReviewById(id)
+      if (!review) throw new Error('Review not found after update')
+      return review
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -285,32 +288,33 @@ export class ReviewService {
   }
 
   async deleteReview(id: string, userId: string): Promise<void> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
       // Get product_id before deleting
-      const reviewResult = await client.query(
-        'SELECT product_id FROM reviews WHERE id = $1 AND user_id = $2',
+      const [review] = await client.query(
+        'SELECT product_id FROM reviews WHERE id = ? AND user_id = ?',
         [id, userId]
       )
+      const rows = review as any[]
 
-      if (reviewResult.rows.length === 0) {
+      if (rows.length === 0) {
         throw new Error('Review not found or unauthorized')
       }
 
-      const productId = reviewResult.rows[0].product_id
+      const productId = rows[0].product_id
 
       // Delete review
-      await client.query('DELETE FROM reviews WHERE id = $1', [id])
+      await client.query('DELETE FROM reviews WHERE id = ?', [id])
 
       // Update product average rating
       await this.updateProductRating(productId, client)
 
-      await client.query('COMMIT')
+      await client.commit()
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -319,25 +323,25 @@ export class ReviewService {
 
   async markReviewHelpful(id: string): Promise<void> {
     await pool.query(
-      'UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = $1',
+      'UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = ?',
       [id]
     )
   }
 
   async getAverageRating(productId: string): Promise<number> {
     const result = await pool.query(
-      'SELECT AVG(rating)::numeric(3,2) as avg_rating FROM reviews WHERE product_id = $1 AND is_approved = true',
+      'SELECT ROUND(AVG(rating), 2) as avg_rating FROM reviews WHERE product_id = ? AND is_approved = true',
       [productId]
     )
 
-    return parseFloat(result.rows[0].avg_rating) || 0
+    return parseFloat((result.rows[0] as any).avg_rating) || 0
   }
 
   async verifyPurchase(userId: string, productId: string): Promise<boolean> {
     const result = await pool.query(
       `SELECT oi.id FROM order_items oi
        JOIN orders o ON oi.order_id = o.id
-       WHERE o.user_id = $1 AND oi.product_id = $2 AND o.status = 'delivered'
+       WHERE o.user_id = ? AND oi.product_id = ? AND o.status = 'delivered'
        LIMIT 1`,
       [userId, productId]
     )
@@ -347,14 +351,39 @@ export class ReviewService {
 
   // Product Q&A methods
   async createQuestion(data: CreateQuestionDTO): Promise<Question> {
-    const result = await pool.query(
-      `INSERT INTO product_questions (product_id, user_id, question)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [data.productId, data.userId, data.question]
+    const id = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO product_questions (id, product_id, user_id, question)
+       VALUES (?, ?, ?, ?)`,
+      [id, data.productId, data.userId, data.question]
     )
 
-    return this.mapQuestion(result.rows[0])
+    const question = await this.getQuestionById(id)
+    if (!question) throw new Error('Failed to create question')
+    return question
+  }
+
+  async getQuestionById(id: string): Promise<Question | null> {
+    const result = await pool.query(
+      `SELECT q.*, u.first_name, u.last_name
+       FROM product_questions q
+       LEFT JOIN users u ON q.user_id = u.id
+       WHERE q.id = ?`,
+      [id]
+    )
+
+    if (result.rows.length === 0) {
+      return null
+    }
+
+    const row = result.rows[0]
+    return {
+      ...this.mapQuestion(row),
+      user: {
+        firstName: row.first_name,
+        lastName: row.last_name,
+      },
+    }
   }
 
   async getQuestions(
@@ -365,19 +394,19 @@ export class ReviewService {
 
     // Get total count
     const countResult = await pool.query(
-      'SELECT COUNT(*) FROM product_questions WHERE product_id = $1 AND is_approved = true',
+      'SELECT COUNT(*) as count FROM product_questions WHERE product_id = ? AND is_approved = true',
       [productId]
     )
-    const total = parseInt(countResult.rows[0].count)
+    const total = parseInt((countResult.rows[0] as any).count)
 
     // Get questions with user info and answers
     const questionsResult = await pool.query(
       `SELECT q.*, u.first_name, u.last_name
        FROM product_questions q
        LEFT JOIN users u ON q.user_id = u.id
-       WHERE q.product_id = $1 AND q.is_approved = true
+       WHERE q.product_id = ? AND q.is_approved = true
        ORDER BY q.created_at DESC
-       LIMIT $2 OFFSET $3`,
+       LIMIT ? OFFSET ?`,
       [productId, limit, offset]
     )
 
@@ -389,12 +418,12 @@ export class ReviewService {
         `SELECT a.*, u.first_name, u.last_name
          FROM product_answers a
          LEFT JOIN users u ON a.user_id = u.id
-         WHERE a.question_id = $1 AND a.is_approved = true
+         WHERE a.question_id = ? AND a.is_approved = true
          ORDER BY a.is_seller DESC, a.created_at ASC`,
         [row.id]
       )
 
-      const answers = answersResult.rows.map(answerRow => ({
+      const answers = answersResult.rows.map((answerRow: any) => ({
         ...this.mapAnswer(answerRow),
         user: {
           firstName: answerRow.first_name,
@@ -421,29 +450,30 @@ export class ReviewService {
   }
 
   async createAnswer(data: CreateAnswerDTO): Promise<Answer> {
-    const client = await pool.connect()
+    const client = await pool.getConnection()
 
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
 
-      const answerResult = await client.query(
-        `INSERT INTO product_answers (question_id, user_id, answer, is_seller)
-         VALUES ($1, $2, $3, $4)
-         RETURNING *`,
-        [data.questionId, data.userId, data.answer, data.isSeller || false]
+      const id = crypto.randomUUID()
+      await client.query(
+        `INSERT INTO product_answers (id, question_id, user_id, answer, is_seller)
+         VALUES (?, ?, ?, ?, ?)`,
+        [id, data.questionId, data.userId, data.answer, data.isSeller || false]
       )
 
       // Mark question as answered
       await client.query(
-        'UPDATE product_questions SET is_answered = true WHERE id = $1',
+        'UPDATE product_questions SET is_answered = true WHERE id = ?',
         [data.questionId]
       )
 
-      await client.query('COMMIT')
+      await client.commit()
 
-      return this.mapAnswer(answerResult.rows[0])
+      const [result] = await client.query('SELECT * FROM product_answers WHERE id = ?', [id])
+      return this.mapAnswer((result as any[])[0])
     } catch (error) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw error
     } finally {
       client.release()
@@ -452,24 +482,25 @@ export class ReviewService {
 
   async markAnswerHelpful(id: string): Promise<void> {
     await pool.query(
-      'UPDATE product_answers SET helpful_count = helpful_count + 1 WHERE id = $1',
+      'UPDATE product_answers SET helpful_count = helpful_count + 1 WHERE id = ?',
       [id]
     )
   }
 
   private async updateProductRating(productId: string, client: any): Promise<void> {
-    const ratingResult = await client.query(
-      `SELECT AVG(rating)::numeric(3,2) as avg_rating, COUNT(*) as review_count
+    const [rating] = await client.query(
+      `SELECT ROUND(AVG(rating), 2) as avg_rating, COUNT(*) as review_count
        FROM reviews
-       WHERE product_id = $1 AND is_approved = true`,
+       WHERE product_id = ? AND is_approved = true`,
       [productId]
     )
+    const ratingResult = rating as any[]
 
-    const avgRating = parseFloat(ratingResult.rows[0].avg_rating) || 0
-    const reviewCount = parseInt(ratingResult.rows[0].review_count)
+    const avgRating = parseFloat(ratingResult[0].avg_rating) || 0
+    const reviewCount = parseInt(ratingResult[0].review_count)
 
     await client.query(
-      'UPDATE products SET average_rating = $1, review_count = $2 WHERE id = $3',
+      'UPDATE products SET average_rating = ?, review_count = ? WHERE id = ?',
       [avgRating, reviewCount, productId]
     )
   }

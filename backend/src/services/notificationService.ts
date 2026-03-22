@@ -87,7 +87,7 @@ export class NotificationService {
 
     // Get shipment details
     const shipmentResult = await pool.query(
-      'SELECT courier, tracking_url FROM shipments WHERE order_id = $1 AND tracking_number = $2',
+      'SELECT courier, tracking_url FROM shipments WHERE order_id = ? AND tracking_number = ?',
       [orderId, trackingNumber]
     )
 
@@ -159,7 +159,7 @@ export class NotificationService {
       `SELECT p.name, pv.variant_name
        FROM product_variants pv
        JOIN products p ON pv.product_id = p.id
-       WHERE pv.sku = $1`,
+       WHERE pv.sku = ?`,
       [sku]
     )
 
@@ -197,7 +197,7 @@ export class NotificationService {
        FROM reviews r
        JOIN products p ON r.product_id = p.id
        JOIN users u ON r.user_id = u.id
-       WHERE r.id = $1`,
+       WHERE r.id = ?`,
       [reviewId]
     )
 
@@ -499,10 +499,10 @@ export class NotificationService {
   private async getOrderData(orderId: string): Promise<OrderData | null> {
     const orderResult = await pool.query(
       `SELECT o.*, 
-              COALESCE(u.first_name || ' ' || u.last_name, 'Customer') as customer_name
+              COALESCE(CONCAT(u.first_name, ' ', u.last_name), 'Customer') as customer_name
        FROM orders o
        LEFT JOIN users u ON o.user_id = u.id
-       WHERE o.id = $1`,
+       WHERE o.id = ?`,
       [orderId]
     )
 
@@ -514,7 +514,7 @@ export class NotificationService {
 
     // Get order items
     const itemsResult = await pool.query(
-      'SELECT * FROM order_items WHERE order_id = $1',
+      'SELECT * FROM order_items WHERE order_id = ?',
       [orderId]
     )
 

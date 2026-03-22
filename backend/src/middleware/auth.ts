@@ -62,7 +62,7 @@ export const authorize = (...roles: string[]) => {
     // Slow path: re-check DB role (handles role upgrades without re-login)
     try {
       const result = await pool.query(
-        'SELECT role FROM users WHERE id = $1 AND account_status = $2',
+        'SELECT role FROM users WHERE id = ? AND account_status = ?',
         [req.user.userId, 'active']
       )
       if (result.rows.length === 0) {

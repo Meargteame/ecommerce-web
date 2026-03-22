@@ -1,4 +1,5 @@
 import pool from '../config/database'
+import crypto from 'crypto'
 
 export interface WishlistItem {
   id: string;
@@ -11,8 +12,8 @@ export interface WishlistItem {
 export class WishlistService {
   async getWishlist(userId: string): Promise<WishlistItem[]> {
     const result = await pool.query(`
-      SELECT w.id, w.user_id as "userId", w.product_id as "productId", w.created_at as "createdAt",
-             json_build_object(
+      SELECT w.id, w.user_id as userId, w.product_id as productId, w.created_at as createdAt,
+             JSON_OBJECT(
                'id', p.id,
                'name', p.name,
                'slug', p.slug,
@@ -24,7 +25,7 @@ export class WishlistService {
              ) as product
       FROM wishlists w
       JOIN products p ON w.product_id = p.id
-      WHERE w.user_id = $1
+      WHERE w.user_id = ?
       ORDER BY w.created_at DESC
     `, [userId]);
     return result.rows;
@@ -32,13 +33,19 @@ export class WishlistService {
 
   async addProduct(userId: string, productId: string): Promise<WishlistItem> {
     try {
-      const result = await pool.query(
-        'INSERT INTO wishlists (user_id, product_id) VALUES ($1, $2) RETURNING id, user_id as "userId", product_id as "productId", created_at as "createdAt"',
-        [userId, productId]
+      const id = crypto.randomUUID()
+      await pool.query(
+        'INSERT INTO wishlists (id, user_id, product_id) VALUES (?, ?, ?)',
+        [id, userId, productId]
       );
-      return result.rows[0];
+      
+      const [result] = await pool.query(
+        'SELECT id, user_id as userId, product_id as productId, created_at as createdAt FROM wishlists WHERE id = ?',
+        [id]
+      )
+      return (result as any[])[0];
     } catch (error: any) {
-      if (error.code === '23505') { // unique violation constraint
+      if (error.code === 'ER_DUP_ENTRY' || error.code === '23505') { 
          throw new Error('Product already in wishlist');
       }
       throw error;
@@ -47,7 +54,7 @@ export class WishlistService {
 
   async removeProduct(userId: string, productId: string): Promise<void> {
     await pool.query(
-      'DELETE FROM wishlists WHERE user_id = $1 AND product_id = $2',
+      'DELETE FROM wishlists WHERE user_id = ? AND product_id = ?',
       [userId, productId]
     );
   }

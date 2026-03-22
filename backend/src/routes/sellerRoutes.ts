@@ -174,7 +174,7 @@ router.get('/messages', async (req: AuthRequest, res: Response) => {
        JOIN users u ON u.id = m.customer_id
        LEFT JOIN orders o ON o.id = m.order_id
        LEFT JOIN products p ON p.id = m.product_id
-       WHERE m.seller_id = $1
+       WHERE m.seller_id = ?
        ORDER BY m.created_at DESC
        LIMIT 50`,
       [req.user!.userId]
@@ -189,11 +189,13 @@ router.get('/messages', async (req: AuthRequest, res: Response) => {
 router.post('/messages', async (req: AuthRequest, res: Response) => {
   try {
     const { customerId, orderId, productId, subject, message } = req.body
-    const result = await pool.query(
-      `INSERT INTO seller_customer_messages (seller_id, customer_id, order_id, product_id, subject, direction, message)
-       VALUES ($1, $2, $3, $4, $5, 'outbound', $6) RETURNING *`,
-      [req.user!.userId, customerId, orderId || null, productId || null, subject || '', message]
+    const id = (await import('crypto')).randomUUID()
+    await pool.query(
+      `INSERT INTO seller_customer_messages (id, seller_id, customer_id, order_id, product_id, subject, direction, message)
+       VALUES (?, ?, ?, ?, ?, ?, 'outbound', ?)`,
+      [id, req.user!.userId, customerId, orderId || null, productId || null, subject || '', message]
     )
+    const result = await pool.query('SELECT * FROM seller_customer_messages WHERE id = ?', [id])
     res.status(201).json({ data: result.rows[0] })
   } catch (err: any) {
     res.status(400).json({ error: err.message })
@@ -205,7 +207,7 @@ router.put('/messages/:id/read', async (req: AuthRequest, res: Response) => {
   try {
     await pool.query(
       `UPDATE seller_customer_messages SET is_read = true, read_at = NOW()
-       WHERE id = $1 AND seller_id = $2`,
+       WHERE id = ? AND seller_id = ?`,
       [req.params.id, req.user!.userId]
     )
     res.json({ message: 'Marked as read' })
@@ -220,7 +222,7 @@ router.put('/messages/:id/read', async (req: AuthRequest, res: Response) => {
 router.get('/shipping', async (req: AuthRequest, res: Response) => {
   try {
     const result = await pool.query(
-      `SELECT * FROM shipping_templates WHERE seller_id = $1 ORDER BY is_default DESC, created_at DESC`,
+      `SELECT * FROM shipping_templates WHERE seller_id = ? ORDER BY is_default DESC, created_at DESC`,
       [req.user!.userId]
     )
     res.json({ data: result.rows })
@@ -237,25 +239,27 @@ router.post('/shipping', async (req: AuthRequest, res: Response) => {
       domesticFlatRate, shipsInternationally, internationalFlatRate, isDefault
     } = req.body
     
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
       if (isDefault) {
-        await client.query('UPDATE shipping_templates SET is_default = false WHERE seller_id = $1', [req.user!.userId])
+        await client.query('UPDATE shipping_templates SET is_default = false WHERE seller_id = ?', [req.user!.userId])
       }
-      const result = await client.query(
+      const id = (await import('crypto')).randomUUID()
+      await client.query(
         `INSERT INTO shipping_templates
-         (seller_id, name, processing_time, domestic_free_shipping, domestic_free_shipping_threshold,
+         (id, seller_id, name, processing_time, domestic_free_shipping, domestic_free_shipping_threshold,
           domestic_flat_rate, ships_internationally, international_flat_rate, is_default)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [req.user!.userId, name, processingTime || 1, domesticFreeShipping || false,
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [id, req.user!.userId, name, processingTime || 1, domesticFreeShipping || false,
          domesticFreeShippingThreshold || null, domesticFlatRate || null,
          shipsInternationally || false, internationalFlatRate || null, isDefault || false]
       )
-      await client.query('COMMIT')
+      await client.commit()
+      const result = await client.query('SELECT * FROM shipping_templates WHERE id = ?', [id])
       res.status(201).json({ data: result.rows[0] })
     } catch (e) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw e
     } finally {
       client.release()
@@ -268,38 +272,40 @@ router.post('/shipping', async (req: AuthRequest, res: Response) => {
 /** PUT /api/seller/shipping/:id */
 router.put('/shipping/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const check = await pool.query('SELECT id FROM shipping_templates WHERE id = $1 AND seller_id = $2', [req.params.id, req.user!.userId])
-    if (check.rows.length === 0) return res.status(404).json({ error: 'Template not found' })
+    const check = await pool.query('SELECT id FROM shipping_templates WHERE id = ? AND seller_id = ?', [req.params.id, req.user!.userId])
+    const checkRows = check.rows
+    if (checkRows.length === 0) return res.status(404).json({ error: 'Template not found' })
 
     const {
       name, processingTime, domesticFreeShipping, domesticFreeShippingThreshold,
       domesticFlatRate, shipsInternationally, internationalFlatRate, isDefault
     } = req.body
 
-    const client = await pool.connect()
+    const client = await pool.getConnection()
     try {
-      await client.query('BEGIN')
+      await client.beginTransaction()
       if (isDefault) {
-        await client.query('UPDATE shipping_templates SET is_default = false WHERE seller_id = $1', [req.user!.userId])
+        await client.query('UPDATE shipping_templates SET is_default = false WHERE seller_id = ?', [req.user!.userId])
       }
-      const result = await client.query(
+      await client.query(
         `UPDATE shipping_templates SET
-          name = COALESCE($1, name), processing_time = COALESCE($2, processing_time),
-          domestic_free_shipping = COALESCE($3, domestic_free_shipping),
-          domestic_free_shipping_threshold = $4,
-          domestic_flat_rate = $5,
-          ships_internationally = COALESCE($6, ships_internationally),
-          international_flat_rate = $7,
-          is_default = COALESCE($8, is_default),
+          name = COALESCE(?, name), processing_time = COALESCE(?, processing_time),
+          domestic_free_shipping = COALESCE(?, domestic_free_shipping),
+          domestic_free_shipping_threshold = ?,
+          domestic_flat_rate = ?,
+          ships_internationally = COALESCE(?, ships_internationally),
+          international_flat_rate = ?,
+          is_default = COALESCE(?, is_default),
           updated_at = NOW()
-         WHERE id = $9 RETURNING *`,
+         WHERE id = ?`,
         [name, processingTime, domesticFreeShipping, domesticFreeShippingThreshold,
          domesticFlatRate, shipsInternationally, internationalFlatRate, isDefault, req.params.id]
       )
-      await client.query('COMMIT')
+      await client.commit()
+      const result = await client.query('SELECT * FROM shipping_templates WHERE id = ?', [req.params.id])
       res.json({ data: result.rows[0] })
     } catch (e) {
-      await client.query('ROLLBACK')
+      await client.rollback()
       throw e
     } finally {
       client.release()
@@ -313,7 +319,7 @@ router.put('/shipping/:id', async (req: AuthRequest, res: Response) => {
 router.delete('/shipping/:id', async (req: AuthRequest, res: Response) => {
   try {
     const result = await pool.query(
-      'DELETE FROM shipping_templates WHERE id = $1 AND seller_id = $2 RETURNING *',
+      'DELETE FROM shipping_templates WHERE id = ? AND seller_id = ?',
       [req.params.id, req.user!.userId]
     )
     if (result.rowCount === 0) return res.status(404).json({ error: 'Template not found' })

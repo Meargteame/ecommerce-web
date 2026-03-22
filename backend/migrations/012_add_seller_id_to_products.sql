@@ -1,14 +1,11 @@
 -- Migration 012: Add seller_id to products for multi-vendor support
 
-ALTER TABLE products
-  ADD COLUMN IF NOT EXISTS seller_id UUID REFERENCES users(id) ON DELETE SET NULL;
-
-CREATE INDEX IF NOT EXISTS idx_products_seller_id ON products(seller_id);
+-- Products table already includes seller_id from migration 001
 
 -- Seller profile table
 CREATE TABLE IF NOT EXISTS seller_profiles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  user_id CHAR(36) NOT NULL UNIQUE,
   store_name VARCHAR(255) NOT NULL,
   store_description TEXT,
   store_logo_url TEXT,
@@ -21,8 +18,9 @@ CREATE TABLE IF NOT EXISTS seller_profiles (
   rating DECIMAL(3,2),
   is_verified BOOLEAN DEFAULT FALSE,
   is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_seller_profiles_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_seller_profiles_user_id ON seller_profiles(user_id);
+CREATE INDEX idx_seller_profiles_user_id ON seller_profiles(user_id);

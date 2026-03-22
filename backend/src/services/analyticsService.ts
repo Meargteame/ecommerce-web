@@ -83,7 +83,7 @@ export class AnalyticsService {
     await pool.query(
       `INSERT INTO analytics_events (
         user_id, session_id, event_type, event_data, ip_address, user_agent, referrer
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         data.userId || null,
         data.sessionId,
@@ -105,7 +105,7 @@ export class AnalyticsService {
         COALESCE(SUM(total_amount) / NULLIF(COUNT(*), 0), 0) as average_order_value,
         COALESCE(SUM((SELECT SUM(quantity) FROM order_items WHERE order_id = orders.id)), 0) as total_items
        FROM orders
-       WHERE created_at >= $1 AND created_at <= $2
+       WHERE created_at >= ? AND created_at <= ?
        AND status NOT IN ('cancelled')`,
       [dateRange.startDate, dateRange.endDate]
     )
@@ -121,7 +121,7 @@ export class AnalyticsService {
         SUM(oi.quantity) as quantity
        FROM order_items oi
        JOIN orders o ON oi.order_id = o.id
-       WHERE o.created_at >= $1 AND o.created_at <= $2
+       WHERE o.created_at >= ? AND o.created_at <= ?
        AND o.status NOT IN ('cancelled')
        GROUP BY oi.product_id, oi.product_name
        ORDER BY revenue DESC
@@ -136,7 +136,7 @@ export class AnalyticsService {
         SUM(total_amount) as revenue,
         COUNT(*) as orders
        FROM orders
-       WHERE created_at >= $1 AND created_at <= $2
+       WHERE created_at >= ? AND created_at <= ?
        AND status NOT IN ('cancelled')
        GROUP BY DATE(created_at)
        ORDER BY date ASC`,
@@ -148,13 +148,13 @@ export class AnalyticsService {
       orderCount: parseInt(summary.order_count),
       averageOrderValue: parseFloat(summary.average_order_value),
       totalItems: parseInt(summary.total_items),
-      topProducts: topProductsResult.rows.map(row => ({
+      topProducts: topProductsResult.rows.map((row: any) => ({
         productId: row.product_id,
         productName: row.product_name,
         revenue: parseFloat(row.revenue),
         quantity: parseInt(row.quantity),
       })),
-      revenueByDay: revenueByDayResult.rows.map(row => ({
+      revenueByDay: revenueByDayResult.rows.map((row: any) => ({
         date: row.date,
         revenue: parseFloat(row.revenue),
         orders: parseInt(row.orders),
@@ -167,7 +167,7 @@ export class AnalyticsService {
     const sessionsResult = await pool.query(
       `SELECT COUNT(DISTINCT session_id) as total_sessions
        FROM analytics_events
-       WHERE created_at >= $1 AND created_at <= $2`,
+       WHERE created_at >= ? AND created_at <= ?`,
       [dateRange.startDate, dateRange.endDate]
     )
 
@@ -175,7 +175,7 @@ export class AnalyticsService {
     const cartSessionsResult = await pool.query(
       `SELECT COUNT(DISTINCT session_id) as sessions_with_cart
        FROM analytics_events
-       WHERE created_at >= $1 AND created_at <= $2
+       WHERE created_at >= ? AND created_at <= ?
        AND event_type = 'add_to_cart'`,
       [dateRange.startDate, dateRange.endDate]
     )
@@ -184,7 +184,7 @@ export class AnalyticsService {
     const checkoutSessionsResult = await pool.query(
       `SELECT COUNT(DISTINCT session_id) as sessions_with_checkout
        FROM analytics_events
-       WHERE created_at >= $1 AND created_at <= $2
+       WHERE created_at >= ? AND created_at <= ?
        AND event_type = 'checkout_start'`,
       [dateRange.startDate, dateRange.endDate]
     )
@@ -193,7 +193,7 @@ export class AnalyticsService {
     const completedOrdersResult = await pool.query(
       `SELECT COUNT(DISTINCT session_id) as completed_orders
        FROM analytics_events
-       WHERE created_at >= $1 AND created_at <= $2
+       WHERE created_at >= ? AND created_at <= ?
        AND event_type = 'checkout_complete'`,
       [dateRange.startDate, dateRange.endDate]
     )
@@ -227,7 +227,7 @@ export class AnalyticsService {
     const totalCustomersResult = await pool.query(
       `SELECT COUNT(DISTINCT id) as total_customers
        FROM users
-       WHERE created_at <= $1`,
+       WHERE created_at <= ?`,
       [dateRange.endDate]
     )
 
@@ -235,7 +235,7 @@ export class AnalyticsService {
     const newCustomersResult = await pool.query(
       `SELECT COUNT(*) as new_customers
        FROM users
-       WHERE created_at >= $1 AND created_at <= $2`,
+       WHERE created_at >= ? AND created_at <= ?`,
       [dateRange.startDate, dateRange.endDate]
     )
 
@@ -243,13 +243,13 @@ export class AnalyticsService {
     const returningCustomersResult = await pool.query(
       `SELECT COUNT(DISTINCT o1.user_id) as returning_customers
        FROM orders o1
-       WHERE o1.created_at >= $1 AND o1.created_at <= $2
+       WHERE o1.created_at >= ? AND o1.created_at <= ?
        AND EXISTS (
          SELECT 1 FROM orders o2
          WHERE o2.user_id = o1.user_id
-         AND o2.created_at < $1
+         AND o2.created_at < ?
        )`,
-      [dateRange.startDate, dateRange.endDate]
+      [dateRange.startDate, dateRange.endDate, dateRange.startDate]
     )
 
     // Average lifetime value
@@ -272,7 +272,7 @@ export class AnalyticsService {
         COUNT(o.id) as order_count
        FROM users u
        JOIN orders o ON u.id = o.user_id
-       WHERE o.created_at >= $1 AND o.created_at <= $2
+       WHERE o.created_at >= ? AND o.created_at <= ?
        AND o.status NOT IN ('cancelled')
        GROUP BY u.id, u.email
        ORDER BY total_spent DESC
@@ -285,7 +285,7 @@ export class AnalyticsService {
       newCustomers: parseInt(newCustomersResult.rows[0].new_customers),
       returningCustomers: parseInt(returningCustomersResult.rows[0].returning_customers),
       averageLifetimeValue: parseFloat(avgLtvResult.rows[0].avg_ltv) || 0,
-      topCustomers: topCustomersResult.rows.map(row => ({
+      topCustomers: topCustomersResult.rows.map((row: any) => ({
         userId: row.user_id,
         email: row.email,
         totalSpent: parseFloat(row.total_spent),
@@ -297,7 +297,7 @@ export class AnalyticsService {
   async getProductMetrics(productId: string, dateRange: DateRange): Promise<ProductMetrics> {
     // Product info
     const productResult = await pool.query(
-      'SELECT name, average_rating, review_count FROM products WHERE id = $1',
+      'SELECT name, average_rating, review_count FROM products WHERE id = ?',
       [productId]
     )
 
@@ -312,8 +312,8 @@ export class AnalyticsService {
       `SELECT COUNT(*) as views
        FROM analytics_events
        WHERE event_type = 'product_view'
-       AND event_data->>'productId' = $1
-       AND created_at >= $2 AND created_at <= $3`,
+       AND JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.productId')) = ?
+       AND created_at >= ? AND created_at <= ?`,
       [productId, dateRange.startDate, dateRange.endDate]
     )
 
@@ -322,8 +322,8 @@ export class AnalyticsService {
       `SELECT COUNT(*) as added_to_cart
        FROM analytics_events
        WHERE event_type = 'add_to_cart'
-       AND event_data->>'productId' = $1
-       AND created_at >= $2 AND created_at <= $3`,
+       AND JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.productId')) = ?
+       AND created_at >= ? AND created_at <= ?`,
       [productId, dateRange.startDate, dateRange.endDate]
     )
 
@@ -334,8 +334,8 @@ export class AnalyticsService {
         SUM(oi.subtotal) as revenue
        FROM order_items oi
        JOIN orders o ON oi.order_id = o.id
-       WHERE oi.product_id = $1
-       AND o.created_at >= $2 AND o.created_at <= $3
+       WHERE oi.product_id = ?
+       AND o.created_at >= ? AND o.created_at <= ?
        AND o.status NOT IN ('cancelled')`,
       [productId, dateRange.startDate, dateRange.endDate]
     )
@@ -377,7 +377,7 @@ export class AnalyticsService {
         COUNT(DISTINCT session_id) as sessions,
         COUNT(DISTINCT CASE WHEN event_type = 'checkout_complete' THEN session_id END) as conversions
        FROM analytics_events
-       WHERE created_at >= $1 AND created_at <= $2
+       WHERE created_at >= ? AND created_at <= ?
        GROUP BY source
        ORDER BY sessions DESC`,
       [dateRange.startDate, dateRange.endDate]
@@ -399,8 +399,8 @@ export class AnalyticsService {
         ) as source,
         SUM(o.total_amount) as revenue
        FROM analytics_events ae
-       JOIN orders o ON ae.session_id::text = o.id::text
-       WHERE ae.created_at >= $1 AND ae.created_at <= $2
+       JOIN orders o ON ae.session_id = o.id
+       WHERE ae.created_at >= ? AND ae.created_at <= ?
        AND ae.event_type = 'checkout_complete'
        AND o.status NOT IN ('cancelled')
        GROUP BY source`,
@@ -408,11 +408,11 @@ export class AnalyticsService {
     )
 
     const revenueMap = new Map<string, number>()
-    revenueResult.rows.forEach(row => {
+    revenueResult.rows.forEach((row: any) => {
       revenueMap.set(row.source, parseFloat(row.revenue))
     })
 
-    return result.rows.map(row => {
+    return result.rows.map((row: any) => {
       const sessions = parseInt(row.sessions)
       const conversions = parseInt(row.conversions)
       const conversionRate = sessions > 0 ? (conversions / sessions) * 100 : 0

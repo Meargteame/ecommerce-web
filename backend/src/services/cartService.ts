@@ -60,11 +60,11 @@ export class CartService {
        JOIN products p ON ci.product_id = p.id
        JOIN users u ON u.id = p.seller_id
        LEFT JOIN product_variants pv ON ci.variant_id = pv.id
-       WHERE ci.user_id = $1`,
+       WHERE ci.user_id = ?`,
       [userId]
     )
 
-    const items: CartItemResponse[] = result.rows.map((row) => {
+    const items: CartItemResponse[] = result.rows.map((row: any) => {
       const basePrice = parseFloat(row.base_price)
       const priceAdjustment = row.price_adjustment ? parseFloat(row.price_adjustment) : 0
       const unitPrice = basePrice + priceAdjustment
@@ -112,7 +112,7 @@ export class CartService {
 
     // Validate product exists and is published
     const productCheck = await pool.query(
-      'SELECT p.id, p.status, u.account_status FROM products p JOIN users u ON u.id = p.seller_id WHERE p.id = $1',
+      'SELECT p.id, p.status, u.account_status FROM products p JOIN users u ON u.id = p.seller_id WHERE p.id = ?',
       [productId]
     )
 
@@ -127,7 +127,7 @@ export class CartService {
     // If variant specified, validate it exists and has stock
     if (variantId) {
       const variantCheck = await pool.query(
-        'SELECT stock_quantity FROM product_variants WHERE id = $1 AND product_id = $2',
+        'SELECT stock_quantity FROM product_variants WHERE id = ? AND product_id = ?',
         [variantId, productId]
       )
 
@@ -141,24 +141,25 @@ export class CartService {
     }
 
     // Check if item already exists in cart
-    const existingItem = await pool.query(
+    const existingResult = await pool.query(
       `SELECT id, quantity FROM cart_items 
-       WHERE user_id = $1 AND product_id = $2 AND (variant_id = $3 OR (variant_id IS NULL AND $3 IS NULL))`,
-      [userId, productId, variantId || null]
+       WHERE user_id = ? AND product_id = ? AND (variant_id = ? OR (variant_id IS NULL AND ? IS NULL))`,
+      [userId, productId, variantId || null, variantId || null]
     )
 
-    if (existingItem.rows.length > 0) {
+    if (existingResult.rows.length > 0) {
       // Update quantity
-      const newQuantity = existingItem.rows[0].quantity + quantity
+      const newQuantity = existingResult.rows[0].quantity + quantity
       await pool.query(
-        'UPDATE cart_items SET quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [newQuantity, existingItem.rows[0].id]
+        'UPDATE cart_items SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [newQuantity, existingResult.rows[0].id]
       )
     } else {
       // Add new item
+      const { id = require('crypto').randomUUID() } = item as any
       await pool.query(
-        'INSERT INTO cart_items (user_id, product_id, variant_id, quantity) VALUES ($1, $2, $3, $4)',
-        [userId, productId, variantId || null, quantity]
+        'INSERT INTO cart_items (id, user_id, product_id, variant_id, quantity) VALUES (?, ?, ?, ?, ?)',
+        [id, userId, productId, variantId || null, quantity]
       )
     }
 
@@ -178,7 +179,7 @@ export class CartService {
       `SELECT ci.id, ci.variant_id, pv.stock_quantity
        FROM cart_items ci
        LEFT JOIN product_variants pv ON ci.variant_id = pv.id
-       WHERE ci.id = $1 AND ci.user_id = $2`,
+       WHERE ci.id = ? AND ci.user_id = ?`,
       [itemId, userId]
     )
 
@@ -192,7 +193,7 @@ export class CartService {
     }
 
     await pool.query(
-      'UPDATE cart_items SET quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      'UPDATE cart_items SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [quantity, itemId]
     )
 
@@ -204,11 +205,11 @@ export class CartService {
 
   async removeItem(userId: string, itemId: string): Promise<Cart> {
     const result = await pool.query(
-      'DELETE FROM cart_items WHERE id = $1 AND user_id = $2',
+      'DELETE FROM cart_items WHERE id = ? AND user_id = ?',
       [itemId, userId]
     )
 
-    if (result.rowCount === 0) {
+    if ((result as any).affectedRows === 0) {
       throw new Error('Cart item not found')
     }
 
@@ -219,7 +220,7 @@ export class CartService {
   }
 
   async clearCart(userId: string): Promise<void> {
-    await pool.query('DELETE FROM cart_items WHERE user_id = $1', [userId])
+    await pool.query('DELETE FROM cart_items WHERE user_id = ?', [userId])
 
     // Invalidate cache
     await cache.del(this.getCartCacheKey(userId))
@@ -228,7 +229,7 @@ export class CartService {
   async saveForLater(userId: string, itemId: string): Promise<Cart> {
     // Verify item belongs to user
     const itemCheck = await pool.query(
-      'SELECT product_id FROM cart_items WHERE id = $1 AND user_id = $2',
+      'SELECT product_id FROM cart_items WHERE id = ? AND user_id = ?',
       [itemId, userId]
     )
 
@@ -240,20 +241,20 @@ export class CartService {
 
     // Check if already in wishlist
     const wishlistCheck = await pool.query(
-      'SELECT id FROM wishlists WHERE user_id = $1 AND product_id = $2',
+      'SELECT id FROM wishlists WHERE user_id = ? AND product_id = ?',
       [userId, product_id]
     )
 
     if (wishlistCheck.rows.length === 0) {
       // Add to wishlist
       await pool.query(
-        'INSERT INTO wishlists (user_id, product_id) VALUES ($1, $2)',
-        [userId, product_id]
+        'INSERT INTO wishlists (id, user_id, product_id) VALUES (?, ?, ?)',
+        [require('crypto').randomUUID(), userId, product_id]
       )
     }
 
     // Remove from cart
-    await pool.query('DELETE FROM cart_items WHERE id = $1', [itemId])
+    await pool.query('DELETE FROM cart_items WHERE id = ?', [itemId])
 
     // Invalidate cache
     await cache.del(this.getCartCacheKey(userId))

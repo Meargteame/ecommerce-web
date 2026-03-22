@@ -4,7 +4,7 @@
   "description": "E-commerce platform backend API",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/server.ts",
+    "dev": "nodemon --exec 'ts-node --transpile-only src/server.ts'",
     "build": "tsc",
     "start": "node dist/server.js",
     "lint": "eslint . --ext .ts",
@@ -13,7 +13,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "db:setup": "./scripts/setup-database.sh",
-    "db:migrate": "./scripts/run-migrations.sh"
+    "db:migrate": "./scripts/run-migrations.sh",
+    "db:migrate:mysql": "chmod +x scripts/run-migrations-mysql.sh && ./scripts/run-migrations-mysql.sh"
   },
   "keywords": [
     "ecommerce",
@@ -40,7 +41,7 @@
     "morgan": "^1.10.0",
     "multer": "^2.1.1",
     "multer-s3": "^3.0.1",
-    "pg": "^8.11.3",
+    "mysql2": "^3.20.0",
     "redis": "^4.6.11",
     "sharp": "^0.34.5",
     "stripe": "^20.4.1",
@@ -58,7 +59,6 @@
     "@types/morgan": "^1.9.9",
     "@types/multer": "^2.1.0",
     "@types/node": "^20.10.5",
-    "@types/pg": "^8.18.0",
     "@types/supertest": "^7.2.0",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^6.15.0",

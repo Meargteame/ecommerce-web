@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { AuthRequest, authenticate, authorize } from '../middleware/auth'
 import pool from '../config/database'
 import { AppError } from '../middleware/errorHandler'
+import crypto from 'crypto'
 
 const router = Router()
 
@@ -18,13 +19,13 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       SELECT 
         rr.*,
         o.order_number, o.total_amount as order_total,
-        json_build_object(
+        JSON_OBJECT(
           'id', o.id,
           'orderNumber', o.order_number,
           'total', o.total_amount,
           'createdAt', o.created_at
-        ) as order,
-        (SELECT json_agg(json_build_object(
+        ) as \`order\`,
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT(
           'id', ri.id,
           'productId', ri.product_id,
           'productName', p.name,
@@ -43,26 +44,28 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const params: any[] = []
     
     if (userRole === 'customer') {
-      query += ` AND rr.user_id = $${params.length + 1}`
+      query += ` AND rr.user_id = ?`
       params.push(userId)
     } else if (userRole === 'seller') {
       // Sellers see returns for their products only
       query += ` AND EXISTS (
         SELECT 1 FROM return_items ri
         JOIN products p ON p.id = ri.product_id
-        WHERE ri.return_id = rr.id AND p.seller_id = $${params.length + 1}
+        WHERE ri.return_id = rr.id AND p.seller_id = ?
       )`
       params.push(userId)
     }
     // Admin sees all (no filter)
     
     if (status) {
-      query += ` AND rr.status = $${params.length + 1}`
+      query += ` AND rr.status = ?`
       params.push(status)
     }
     
-    query += ` ORDER BY rr.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
-    params.push(limit, offset)
+    const limitNum = parseInt(limit as string)
+    const offsetNum = parseInt(offset as string)
+    query += ` ORDER BY rr.created_at DESC LIMIT ? OFFSET ?`
+    params.push(limitNum, offsetNum)
     
     const result = await pool.query(query, params)
     
@@ -74,10 +77,10 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
 // POST /api/returns - Initiate return
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
-  const client = await pool.connect()
+  const client = await pool.getConnection()
   
   try {
-    await client.query('BEGIN')
+    await client.beginTransaction()
     
     const userId = req.user!.userId
     const { orderId, reason, reasonDetails, returnMethod, items } = req.body
@@ -87,7 +90,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       `SELECT o.*, oi.id as has_items
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
-       WHERE o.id = $1 AND o.user_id = $2 AND o.status IN ('delivered', 'shipped')
+       WHERE o.id = ? AND o.user_id = ? AND o.status IN ('delivered', 'shipped')
        LIMIT 1`,
       [orderId, userId]
     )
@@ -106,7 +109,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     
     // Check for existing return on this order
     const existingReturn = await client.query(
-      `SELECT id FROM return_requests WHERE order_id = $1 AND status NOT IN ('rejected', 'closed')`,
+      `SELECT id FROM return_requests WHERE order_id = ? AND status NOT IN ('rejected', 'closed')`,
       [orderId]
     )
     
@@ -124,7 +127,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
           (SELECT image_url FROM product_images WHERE product_id = p.id LIMIT 1) as image
          FROM order_items oi
          JOIN products p ON p.id = oi.product_id
-         WHERE oi.id = $1 AND oi.order_id = $2`,
+         WHERE oi.id = ? AND oi.order_id = ?`,
         [item.orderItemId, orderId]
       )
       
@@ -143,7 +146,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         `SELECT COALESCE(SUM(quantity), 0) as returned_qty
          FROM return_items ri
          JOIN return_requests rr ON rr.id = ri.return_id
-         WHERE ri.order_item_id = $1 AND rr.status NOT IN ('rejected', 'closed')`,
+         WHERE ri.order_item_id = ? AND rr.status NOT IN ('rejected', 'closed')`,
         [item.orderItemId]
       )
       
@@ -165,37 +168,39 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     }
     
     // Create return request
-    const returnResult = await client.query(
+    const id = crypto.randomUUID()
+    await client.query(
       `INSERT INTO return_requests (
-        order_id, user_id, reason, reason_details, return_method,
+        id, order_id, user_id, reason, reason_details, return_method,
         total_items, total_refund_amount, pickup_address_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 
-        (SELECT shipping_address_id FROM orders WHERE id = $1)
-      )
-      RETURNING *`,
-      [orderId, userId, reason, reasonDetails, returnMethod || 'pickup', items.length, totalRefund]
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 
+        (SELECT shipping_address_id FROM orders WHERE id = ?)
+      )`,
+      [id, orderId, userId, reason, reasonDetails, returnMethod || 'pickup', items.length, totalRefund, orderId]
     )
     
-    const returnId = returnResult.rows[0].id
+    const returnResult = await client.query('SELECT * FROM return_requests WHERE id = ?', [id])
+    const returnId = id
     
     // Create return items
     for (const item of returnItems) {
+      const riId = crypto.randomUUID()
       await client.query(
-        `INSERT INTO return_items (return_id, order_item_id, product_id, variant_id, quantity, refund_amount)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [returnId, item.orderItemId, item.productId, item.variantId, item.quantity, item.refundAmount]
+        `INSERT INTO return_items (id, return_id, order_item_id, product_id, variant_id, quantity, refund_amount)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [riId, returnId, item.orderItemId, item.productId, item.variantId, item.quantity, item.refundAmount]
       )
     }
     
-    await client.query('COMMIT')
+    await client.commit()
     
     res.status(201).json({
       message: 'Return request submitted successfully',
       data: returnResult.rows[0]
     })
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.rollback()
     if (error instanceof AppError) throw error
     throw new AppError('Failed to initiate return', 500)
   } finally {
@@ -214,7 +219,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       SELECT 
         rr.*,
         o.order_number, o.created_at as order_date, o.total_amount as order_total,
-        json_build_object(
+        JSON_OBJECT(
           'line1', a.address_line1,
           'line2', a.address_line2,
           'city', a.city,
@@ -222,7 +227,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
           'postalCode', a.postal_code,
           'country', a.country
         ) as pickup_address,
-        (SELECT json_agg(json_build_object(
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT(
           'id', ri.id,
           'orderItemId', ri.order_item_id,
           'productId', ri.product_id,
@@ -245,18 +250,18 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       FROM return_requests rr
       JOIN orders o ON o.id = rr.order_id
       LEFT JOIN addresses a ON a.id = rr.pickup_address_id
-      WHERE rr.id = $1
+      WHERE rr.id = ?
     `
-    const params = [id]
+    const params: any[] = [id]
     
     if (userRole === 'customer') {
-      query += ` AND rr.user_id = $2`
+      query += ` AND rr.user_id = ?`
       params.push(userId)
     } else if (userRole === 'seller') {
       query += ` AND EXISTS (
         SELECT 1 FROM return_items ri
         JOIN products p ON p.id = ri.product_id
-        WHERE ri.return_id = rr.id AND p.seller_id = $2
+        WHERE ri.return_id = rr.id AND p.seller_id = ?
       )`
       params.push(userId)
     }
@@ -288,7 +293,7 @@ router.put('/:id/status', authenticate, authorize('admin', 'seller'), async (req
       const checkResult = await pool.query(
         `SELECT 1 FROM return_items ri
          JOIN products p ON p.id = ri.product_id
-         WHERE ri.return_id = $1 AND p.seller_id = $2
+         WHERE ri.return_id = ? AND p.seller_id = ?
          LIMIT 1`,
         [id, userId]
       )
@@ -298,28 +303,32 @@ router.put('/:id/status', authenticate, authorize('admin', 'seller'), async (req
       }
     }
     
-    const result = await pool.query(
+    await pool.query(
       `UPDATE return_requests 
-       SET status = $1,
-           tracking_number = COALESCE($2, tracking_number),
+       SET status = ?,
+           tracking_number = COALESCE(?, tracking_number),
            ${status === 'received' ? 'received_at = NOW(),' : ''}
            ${status === 'refunded' ? 'refund_processed_at = NOW(),' : ''}
            updated_at = NOW()
-       WHERE id = $3
-       RETURNING *`,
+       WHERE id = ?`,
       [status, trackingNumber, id]
     )
+    
+    const result = await pool.query('SELECT * FROM return_requests WHERE id = ?', [id])
     
     if (result.rows.length === 0) {
       throw new AppError('Return not found', 404)
     }
     
-    // Create notification for customer
     const returnReq = result.rows[0]
+    
+    // Create notification for customer
+    const noticeId = crypto.randomUUID()
     await pool.query(
-      `INSERT INTO notifications (user_id, type, title, message)
-       VALUES ($1, $2, $3, $4)`,
+      `INSERT INTO notifications (id, user_id, type, title, message)
+       VALUES (?, ?, ?, ?, ?)`,
       [
+        noticeId,
         returnReq.user_id, 
         'system',
         'Return Status Updated',
@@ -329,7 +338,7 @@ router.put('/:id/status', authenticate, authorize('admin', 'seller'), async (req
     
     res.json({
       message: 'Return status updated',
-      data: result.rows[0]
+      data: returnReq
     })
   } catch (error) {
     if (error instanceof AppError) throw error
@@ -339,10 +348,10 @@ router.put('/:id/status', authenticate, authorize('admin', 'seller'), async (req
 
 // Admin: Inspect returned items
 router.post('/:id/inspect', authenticate, authorize('admin'), async (req: AuthRequest, res: Response) => {
-  const client = await pool.connect()
+  const client = await pool.getConnection()
   
   try {
-    await client.query('BEGIN')
+    await client.beginTransaction()
     
     const { id } = req.params
     const { items, notes } = req.body // items: [{itemId, condition, restockingFee, accepted}]
@@ -352,19 +361,19 @@ router.post('/:id/inspect', authenticate, authorize('admin'), async (req: AuthRe
     for (const item of items) {
       await client.query(
         `UPDATE return_items 
-         SET condition_received = $1,
-             restocking_fee = $2,
-             quantity_accepted = CASE WHEN $3 THEN quantity ELSE 0 END,
-             quantity_rejected = CASE WHEN $3 THEN 0 ELSE quantity END,
-             notes = $4
-         WHERE id = $5 AND return_id = $6`,
-        [item.condition, item.restockingFee, item.accepted, item.notes, item.itemId, id]
+         SET condition_received = ?,
+             restocking_fee = ?,
+             quantity_accepted = CASE WHEN ? THEN quantity ELSE 0 END,
+             quantity_rejected = CASE WHEN ? THEN 0 ELSE quantity END,
+             notes = ?
+         WHERE id = ? AND return_id = ?`,
+        [item.condition, item.restockingFee, item.accepted, item.accepted, item.notes, item.itemId, id]
       )
       
       if (!item.accepted) {
         // Adjust refund if item rejected
         const itemResult = await client.query(
-          `SELECT refund_amount FROM return_items WHERE id = $1`,
+          `SELECT refund_amount FROM return_items WHERE id = ?`,
           [item.itemId]
         )
         totalRefundAdjustment += parseFloat(itemResult.rows[0].refund_amount)
@@ -375,19 +384,19 @@ router.post('/:id/inspect', authenticate, authorize('admin'), async (req: AuthRe
     await client.query(
       `UPDATE return_requests 
        SET inspected_at = NOW(),
-           inspected_by = $1,
-           inspection_notes = $2,
-           total_refund_amount = total_refund_amount - $3,
+           inspected_by = ?,
+           inspection_notes = ?,
+           total_refund_amount = total_refund_amount - ?,
            updated_at = NOW()
-       WHERE id = $4`,
+       WHERE id = ?`,
       [req.user!.userId, notes, totalRefundAdjustment, id]
     )
     
-    await client.query('COMMIT')
+    await client.commit()
     
     res.json({ message: 'Inspection completed' })
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.rollback()
     throw new AppError('Failed to inspect items', 500)
   } finally {
     client.release()
@@ -400,13 +409,14 @@ router.post('/:id/cancel', authenticate, async (req: AuthRequest, res: Response)
     const userId = req.user!.userId
     const { id } = req.params
     
-    const result = await pool.query(
+    await pool.query(
       `UPDATE return_requests 
        SET status = 'cancelled', updated_at = NOW()
-       WHERE id = $1 AND user_id = $2 AND status IN ('pending', 'approved')
-       RETURNING *`,
+       WHERE id = ? AND user_id = ? AND status IN ('pending', 'approved')`,
       [id, userId]
     )
+    
+    const result = await pool.query('SELECT * FROM return_requests WHERE id = ? AND user_id = ? AND status = ?', [id, userId, 'cancelled'])
     
     if (result.rows.length === 0) {
       throw new AppError('Return not found or cannot be cancelled', 400)
@@ -430,7 +440,7 @@ router.post('/:id/exchange', authenticate, async (req: AuthRequest, res: Respons
     
     // Verify return belongs to user
     const returnCheck = await pool.query(
-      `SELECT * FROM return_requests WHERE id = $1 AND user_id = $2 AND status = 'approved'`,
+      `SELECT * FROM return_requests WHERE id = ? AND user_id = ? AND status = 'approved'`,
       [id, userId]
     )
     
@@ -446,7 +456,7 @@ router.post('/:id/exchange', authenticate, async (req: AuthRequest, res: Respons
     for (const item of exchangeItems) {
       // Get current item refund value
       const currentItem = await pool.query(
-        `SELECT refund_amount FROM return_items WHERE id = $1 AND return_id = $2`,
+        `SELECT refund_amount FROM return_items WHERE id = ? AND return_id = ?`,
         [item.returnItemId, id]
       )
       
@@ -460,9 +470,9 @@ router.post('/:id/exchange', authenticate, async (req: AuthRequest, res: Respons
       const newProduct = await pool.query(
         `SELECT COALESCE(pv.price, p.base_price) as price
          FROM products p
-         LEFT JOIN product_variants pv ON pv.id = $2
-         WHERE p.id = $1`,
-        [item.newProductId, item.newVariantId]
+         LEFT JOIN product_variants pv ON pv.id = ?
+         WHERE p.id = ?`,
+        [item.newVariantId, item.newProductId]
       )
       
       if (newProduct.rows.length === 0) {
@@ -474,32 +484,35 @@ router.post('/:id/exchange', authenticate, async (req: AuthRequest, res: Respons
     }
     
     // Create exchange request
-    const exchangeResult = await pool.query(
+    const exId = crypto.randomUUID()
+    await pool.query(
       `INSERT INTO exchange_requests (
-        return_id, order_id, user_id, total_items, exchange_difference
-      ) VALUES ($1, $2, $3, $4, $5)
-      RETURNING *`,
-      [id, returnRequest.order_id, userId, exchangeItems.length, totalDifference]
+        id, return_id, order_id, user_id, total_items, exchange_difference
+      ) VALUES (?, ?, ?, ?, ?, ?)`,
+      [exId, id, returnRequest.order_id, userId, exchangeItems.length, totalDifference]
     )
     
-    const exchangeId = exchangeResult.rows[0].id
+    const exchangeResult = await pool.query('SELECT * FROM exchange_requests WHERE id = ?', [exId])
+    const exchangeId = exId
     
     // Create exchange items
     for (const item of exchangeItems) {
       const newProduct = await pool.query(
         `SELECT COALESCE(pv.price, p.base_price) as price
          FROM products p
-         LEFT JOIN product_variants pv ON pv.id = $2
-         WHERE p.id = $1`,
-        [item.newProductId, item.newVariantId]
+         LEFT JOIN product_variants pv ON pv.id = ?
+         WHERE p.id = ?`,
+        [item.newVariantId, item.newProductId]
       )
       
+      const eiId = crypto.randomUUID()
       await pool.query(
         `INSERT INTO exchange_items (
-          exchange_id, return_item_id, new_product_id, new_variant_id, 
+          id, exchange_id, return_item_id, new_product_id, new_variant_id, 
           new_quantity, price_difference
-        ) VALUES ($1, $2, $3, $4, $5, $6)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
+          eiId,
           exchangeId,
           item.returnItemId,
           item.newProductId,

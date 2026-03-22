@@ -3,8 +3,10 @@ import dotenv from 'dotenv'
 
 dotenv.config({ override: false })
 
+const hostValue = process.env.DB_HOST && process.env.DB_HOST !== 'localhost' ? process.env.DB_HOST : '127.0.0.1';
+
 const rawPool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
+  host: hostValue,
   port: parseInt(process.env.DB_PORT || '3306'),
   database: process.env.DB_NAME || 'u854501207_ecommerce',
   user: process.env.DB_USER || 'u854501207_u12345_ecommer',

@@ -1,0 +1,29 @@
+# <type>(<scope>): <Short, descriptive subject line>
+# |<----  Using a Maximum Of 50 Characters  ---->|
+
+# [Optional] Detailed description of the changes. 
+# Explain WHY this change is being made and HOW it addresses the issue.
+# |<----   Try To Limit Each Line to a Maximum Of 72 Characters   ---->|
+
+# Frontend changes (if applicable):
+# - 
+
+# Backend changes (if applicable):
+# -
+
+# Related Issue/Ticket: #
+
+# --- COMMIT INSTRUCTIONS ---
+# Allowed <type> values:
+#   feat     : New feature
+#   fix      : Bug fix
+#   refactor : Code change that neither fixes a bug nor adds a feature
+#   perf     : Code change that improves performance
+#   style    : Formatting, missing semi-colons, etc. (no logical changes)
+#   docs     : Documentation changes
+#   test     : Adding or updating tests
+#   chore    : Build process, dependency updates, tooling
+#
+# Allowed <scope> values (examples):
+#   frontend, backend, db, admin, api, components, docs
+# ---------------------------

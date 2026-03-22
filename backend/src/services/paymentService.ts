@@ -120,7 +120,7 @@ export class PaymentService {
       )
 
       await client.query(
-        `INSERT INTO order_status_history (id, order_id, status, notes) VALUES (?, ?, ?)`,
+        `INSERT INTO order_status_history (id, order_id, status, notes) VALUES (?, ?, ?, ?)`,
         [crypto.randomUUID(), data.orderId, 'payment_confirmed', 'Payment confirmed via Stripe']
       )
 
@@ -179,7 +179,7 @@ export class PaymentService {
           )
           try {
             await client.query(
-              `INSERT INTO order_status_history (id, order_id, status, notes) VALUES (?, ?, ?)`,
+              `INSERT INTO order_status_history (id, order_id, status, notes) VALUES (?, ?, ?, ?)`,
               [crypto.randomUUID(), orderId, 'payment_confirmed', 'Payment confirmed via Stripe webhook']
             )
           } catch {

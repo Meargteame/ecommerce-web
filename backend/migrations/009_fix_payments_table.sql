@@ -14,7 +14,7 @@ UPDATE payments SET transaction_id = payment_provider_id WHERE transaction_id IS
 UPDATE payments SET payment_details = metadata WHERE payment_details IS NULL AND metadata IS NOT NULL;
 
 -- Drop the restrictive payment_method check constraint
--- Note: Payment constraint was already updated in migration 003
+ALTER TABLE payments MODIFY COLUMN payment_method VARCHAR(50) NOT NULL;
 
 -- Add a more permissive constraint
 ALTER TABLE payments ADD CONSTRAINT payments_payment_method_check 

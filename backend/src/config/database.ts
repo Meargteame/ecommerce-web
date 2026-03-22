@@ -6,9 +6,9 @@ dotenv.config({ override: false })
 const rawPool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '3306'),
-  database: process.env.DB_NAME || 'ecommerce_db',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME || 'u854501207_ecommerce',
+  user: process.env.DB_USER || 'u854501207_u12345_ecommer',
+  password: process.env.DB_PASSWORD || 'Thisis1yearplan@2025',
   connectionLimit: parseInt(process.env.DB_MAX_CONNECTIONS || '20'),
   waitForConnections: true,
   queueLimit: 0,

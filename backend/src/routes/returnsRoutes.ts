@@ -119,7 +119,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     
     // Validate items and calculate refund
     let totalRefund = 0
-    const returnItems = []
+    const returnItems: any[] = []
     
     for (const item of items) {
       const itemCheck = await client.query(

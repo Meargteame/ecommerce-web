@@ -7,7 +7,7 @@
     "dev": "nodemon --exec 'ts-node --transpile-only src/server.ts'",
     "build": "tsc",
     "postinstall": "npm run build",
-    "start": "NODE_ENV=production PORT=5000 DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=u854501207_ecommerce DB_USER=u854501207_u12345_ecommer DB_PASSWORD='Thisis1yearplan@2025' FRONTEND_URL=https://shophub.abyssiniabazaar.com JWT_SECRET=prod_secret_123 node dist/server.js",
+    "start": "NODE_ENV=production PORT=5000 DB_HOST=localhost DB_PORT=3306 DB_NAME=u854501207_ecommerce DB_USER=u854501207_u12345_ecommer DB_PASSWORD='Thisis1yearplan@2025' FRONTEND_URL=https://shophub.abyssiniabazaar.com JWT_SECRET=prod_secret_123 node dist/server.js",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "test": "jest",

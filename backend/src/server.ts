@@ -4,7 +4,7 @@ import pool from './config/database'
 import { connectRedis } from './config/redis'
 
 // Load environment variables
-dotenv.config()
+dotenv.config({ override: false })
 
 const PORT = process.env.PORT || 5000
 

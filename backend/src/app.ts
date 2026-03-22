@@ -10,6 +10,9 @@ import { generalLimiter } from './middleware/rateLimiter'
 
 const app: Application = express()
 
+// Trust proxy required for express-rate-limit when behind reverse proxy (like Hostinger/Nginx)
+app.set('trust proxy', 1)
+
 // Security middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },

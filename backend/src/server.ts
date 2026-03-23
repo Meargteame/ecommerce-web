@@ -7,6 +7,7 @@ import { connectRedis } from './config/redis'
 dotenv.config({ override: false })
 
 const PORT = process.env.PORT || 5000
+console.log(`Debug: process.env.PORT is ${process.env.PORT || 'undefined (using fallback 5000)'}`)
 
 // Test database connection
 const testDatabaseConnection = async () => {

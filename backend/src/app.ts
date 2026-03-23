@@ -73,6 +73,11 @@ app.get('/health', (_req, res) => {
   })
 })
 
+// Simple ping test for Hostinger connectivity
+app.get('/ping', (_req, res) => {
+  res.send('pong')
+})
+
 // API routes
 import authRoutes from './routes/authRoutes'
 import userRoutes from './routes/userRoutes'

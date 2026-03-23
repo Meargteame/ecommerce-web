@@ -29,12 +29,24 @@ router.get('/run', async (req, res) => {
       multipleStatements: false
     })
     
+    let log = ''
+
+    if (req.query.reset === 'true') {
+      log += 'Dropping all existing tables due to ?reset=true...<br>'
+      const [tables]: any = await pool.query('SHOW TABLES')
+      await pool.query('SET FOREIGN_KEY_CHECKS = 0')
+      for (const tableRow of tables) {
+        const tableName = Object.values(tableRow)[0]
+        await pool.query(`DROP TABLE IF EXISTS \`${tableName}\``)
+        log += `Dropped table ${tableName}<br>`
+      }
+      await pool.query('SET FOREIGN_KEY_CHECKS = 1')
+    }
+
     const migrationsDir = path.join(process.cwd(), 'migrations')
     const files = fs.readdirSync(migrationsDir)
       .filter(file => file.endsWith('.sql'))
       .sort()
-      
-    let log = ''
 
     for (const file of files) {
       log += `Processing ${file}...<br>`

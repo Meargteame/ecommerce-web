@@ -13,7 +13,25 @@ const app: Application = express()
 // Trust proxy required for express-rate-limit when behind reverse proxy (like Hostinger/Nginx)
 app.set('trust proxy', 1)
 
-// Security middleware
+// ============================================================
+// CORS — must be the VERY FIRST middleware, before helmet/limiter
+// ============================================================
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+}))
+
+// Explicitly handle OPTIONS preflight so Hostinger's proxy never blocks it
+app.options('*', cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+}))
+
+// Security middleware (AFTER cors so preflight is already handled)
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: {
@@ -30,11 +48,6 @@ app.use(helmet({
 const allowedOrigins = process.env.FRONTEND_URL 
   ? process.env.FRONTEND_URL.split(',') 
   : ['http://localhost:3000'];
-
-app.use(cors({
-  origin: true, // Automatically reflects the request origin (safest fallback for credentials: true)
-  credentials: true,
-}))
 
 // Rate limiting
 app.use(generalLimiter)

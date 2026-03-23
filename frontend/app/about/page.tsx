@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import Header from '@/components/layout/Header'
+import Header from '@/components/layout/HeaderWrapper'
 import Footer from '@/components/layout/Footer'
 import CartDrawer from '@/components/cart/CartDrawer'
 import { Heart, Globe, Shield, Zap, ChevronRight } from 'lucide-react'

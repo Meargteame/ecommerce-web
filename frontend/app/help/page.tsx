@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import Header from '@/components/layout/Header'
+import Header from '@/components/layout/HeaderWrapper'
 import Footer from '@/components/layout/Footer'
 import CartDrawer from '@/components/cart/CartDrawer'
 import { Search, Package, CreditCard, Truck, RotateCcw, User, MessageCircle, ChevronDown, ChevronUp } from 'lucide-react'

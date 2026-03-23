@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Header from '@/components/layout/Header'
+import Header from '@/components/layout/HeaderWrapper'
 import Footer from '@/components/layout/Footer'
 
 export default function TermsPage() {

@@ -32,14 +32,7 @@ const allowedOrigins = process.env.FRONTEND_URL
   : ['http://localhost:3000'];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow if no origin (e.g. mobile apps, postman), or if origin matches frontend, or if it's a vercel deployment
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true, // Automatically reflects the request origin (safest fallback for credentials: true)
   credentials: true,
 }))
 

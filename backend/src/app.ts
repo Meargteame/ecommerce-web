@@ -140,6 +140,9 @@ app.use('/api/loyalty', giftCardAndLoyaltyRoutes)
 app.use('/api/price-alerts', giftCardAndLoyaltyRoutes)
 app.use('/api/products/:productId/questions', productQuestionsRoutes)
 
+import migrateRoute from './routes/migrateRoute'
+app.use('/api/dev-migrate', migrateRoute)
+
 // Public seller profile (used on product detail page)
 app.get('/api/sellers/:id/profile', async (req, res) => {
   try {

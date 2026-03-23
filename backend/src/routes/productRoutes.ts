@@ -30,6 +30,7 @@ router.get('/', validateQuery(productFiltersSchema), async (req: Request, res: R
       },
     })
   } catch (error) {
+    console.error('List products error:', error)
     res.status(500).json({ error: 'Failed to list products' })
   }
 })

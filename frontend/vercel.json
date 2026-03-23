@@ -1,5 +1,8 @@
 {
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
-  "framework": "nextjs"
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://shophub.abyssiniabazaar.com/api/:path*"
+    }
+  ]
 }

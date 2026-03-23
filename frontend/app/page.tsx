@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import Header from '@/components/layout/HeaderWrapper'
 import Footer from '@/components/layout/Footer'
 import CartDrawer from '@/components/cart/CartDrawer'
